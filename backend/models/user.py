@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import BigInteger, String, DateTime, func
+from sqlalchemy import BigInteger, Integer, String, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.database import Base
@@ -14,8 +14,14 @@ class User(Base):
     username: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     first_name: Mapped[str] = mapped_column(String(128))
     last_name: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    nickname: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
 
     coins: Mapped[int] = mapped_column(BigInteger, default=100)
+
+    # Энергия: макс 50, каждые 6 минут +1 (полный реген за 5 часов)
+    energy: Mapped[int] = mapped_column(Integer, default=50)
+    energy_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     shield_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_daily_reward: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_raid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -27,7 +33,6 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    # Relationships
     units: Mapped[list["Unit"]] = relationship("Unit", back_populates="owner", lazy="selectin")
     transactions: Mapped[list["Transaction"]] = relationship("Transaction", back_populates="user", lazy="noload")
     notifications: Mapped[list["Notification"]] = relationship("Notification", back_populates="user", lazy="noload")

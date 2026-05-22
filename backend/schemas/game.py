@@ -11,10 +11,21 @@ class RaidResult(BaseModel):
     attacker_power: int
     defender_power: int
     message: str
+    energy_left: int
+
+
+class PveRaidResult(BaseModel):
+    success: bool
+    coins_earned: int
+    coins_lost: int
+    attacker_power: int
+    bot_power: int
+    message: str
+    energy_left: int
 
 
 class ShieldRequest(BaseModel):
-    pass  # просто активируем щит
+    pass
 
 
 class ShieldResult(BaseModel):
@@ -38,6 +49,7 @@ class LeaderboardEntry(BaseModel):
     user_id: int
     username: str | None
     first_name: str
+    nickname: str | None
     coins: int
     total_power: int
 

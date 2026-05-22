@@ -90,14 +90,30 @@ async def get_or_create_user(
     db.add(user)
     await db.flush()
 
-    # Записываем реферала
+    # Записываем реферала и сразу начисляем награду рефереру
     if referrer_id and referrer_id != user_id:
         ref_check = await db.execute(
             select(Referral).where(Referral.referred_id == user_id)
         )
         if not ref_check.scalar_one_or_none():
-            referral = Referral(referrer_id=referrer_id, referred_id=user_id)
+            referral = Referral(
+                referrer_id=referrer_id,
+                referred_id=user_id,
+                reward_claimed=True   # уже начислено ниже
+            )
             db.add(referral)
+
+            # Автоматически начисляем монеты рефереру
+            referrer_result = await db.execute(select(User).where(User.id == referrer_id))
+            referrer = referrer_result.scalar_one_or_none()
+            if referrer:
+                referrer.coins += settings.REFERRAL_REWARD_COINS
+                db.add(Transaction(
+                    user_id=referrer_id,
+                    amount=settings.REFERRAL_REWARD_COINS,
+                    type="referral",
+                    description=f"Реферал зарегистрировался: {telegram_user.get('first_name', '')}"
+                ))
 
     # Стартовая транзакция
     db.add(Transaction(

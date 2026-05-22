@@ -5,18 +5,26 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ── Пользователи ────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS users (
-    id              BIGINT          PRIMARY KEY,           -- Telegram user_id
-    username        VARCHAR(64),
-    first_name      VARCHAR(128)    NOT NULL,
-    last_name       VARCHAR(128),
-    coins           BIGINT          NOT NULL DEFAULT 100,
-    shield_until    TIMESTAMPTZ,
-    last_daily_reward TIMESTAMPTZ,
-    last_raid_at    TIMESTAMPTZ,
-    referrer_id     BIGINT          REFERENCES users(id),
-    created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+    id                  BIGINT      PRIMARY KEY,
+    username            VARCHAR(64),
+    first_name          VARCHAR(128) NOT NULL,
+    last_name           VARCHAR(128),
+    nickname            VARCHAR(32),
+    coins               BIGINT      NOT NULL DEFAULT 100,
+    energy              INTEGER     NOT NULL DEFAULT 50,
+    energy_updated_at   TIMESTAMPTZ,
+    shield_until        TIMESTAMPTZ,
+    last_daily_reward   TIMESTAMPTZ,
+    last_raid_at        TIMESTAMPTZ,
+    referrer_id         BIGINT      REFERENCES users(id),
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Добавляем колонки если таблица уже существует (для существующих БД)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname VARCHAR(32);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS energy INTEGER NOT NULL DEFAULT 50;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS energy_updated_at TIMESTAMPTZ;
 
 -- ── Юниты ───────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS units (
