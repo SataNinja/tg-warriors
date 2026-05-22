@@ -7,17 +7,17 @@ RUN npm install
 
 COPY . .
 
-# VITE_API_URL будет подставлен при билде через Railway env variable
 ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
 
 RUN npm run build
 
-# Stage 2 — nginx раздаёт готовые статические файлы
+# Stage 2 — nginx раздаёт статику
+# Кладём конфиг в /etc/nginx/templates/ — nginx автоматически
+# подставляет переменные окружения (в т.ч. $PORT) при старте
 FROM nginx:alpine
 
 COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 
-EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
