@@ -101,8 +101,16 @@ export function HomePage({ gameState, onRefresh }: Props) {
 
             <div style={styles.refBlock}>
               <div style={styles.refTitle}>🔗 Твоя реферальная ссылка:</div>
-              <div style={styles.refLink}>
-                https://t.me/YOUR_BOT?start=ref_{user.id}
+              <div
+                style={styles.refLink}
+                onClick={() => {
+                  const link = `https://t.me/${import.meta.env.VITE_BOT_USERNAME ?? 'YOUR_BOT'}?start=ref_${user.id}`
+                  navigator.clipboard?.writeText(link)
+                  alert('Ссылка скопирована!')
+                }}
+              >
+                https://t.me/{import.meta.env.VITE_BOT_USERNAME ?? 'YOUR_BOT'}?start=ref_{user.id}
+                <div style={{ fontSize: 11, opacity: 0.5, marginTop: 3 }}>нажми чтобы скопировать</div>
               </div>
             </div>
           </>
