@@ -7,7 +7,7 @@ from routers.deps import get_current_user
 from schemas.shop import (
     CastleInfo, CastleUpgradeResult,
     WeaponInfo, WeaponBuyResult, WeaponUpgradeResult,
-    BuyEggRequest, BuyEggResult,
+    BuyEggRequest, BuyEggResult, FoodItem,
 )
 from services import shop_service
 
@@ -58,3 +58,10 @@ async def buy_egg(
     db: AsyncSession = Depends(get_db),
 ):
     return await shop_service.buy_egg(db, current_user, body.egg_type)
+
+
+# ── Еда для питомцев ─────────────────────────────────────────────────────────
+@router.get("/food", response_model=list[FoodItem])
+async def food_list():
+    """Список доступной еды для питомцев."""
+    return shop_service.get_food_list()

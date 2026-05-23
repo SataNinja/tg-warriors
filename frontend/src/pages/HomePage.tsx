@@ -150,7 +150,7 @@ export function HomePage({ gameState, onRefresh }: Props) {
 
         {/* ── Питомцы ── */}
         {tab === 'pets' && (
-          <PetPanel onRefresh={onRefresh} />
+          <PetPanel onRefresh={onRefresh} userCoins={user.coins} />
         )}
 
         {/* ── Лидерборд ── */}

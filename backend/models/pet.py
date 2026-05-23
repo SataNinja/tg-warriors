@@ -29,6 +29,10 @@ class Pet(Base):
     energy_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_battle_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Голод питомца (0-100, убывает -1 каждые 20 минут)
+    hunger: Mapped[int] = mapped_column(Integer, default=100)
+    hunger_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     owner: Mapped["User"] = relationship("User", back_populates="pets")

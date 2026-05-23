@@ -58,16 +58,20 @@ class PetOut(BaseModel):
     pet_type: str
     rarity: str
     level: int
-    power_bonus: int       # базовый бонус (при 100% энергии)
-    effective_power_bonus: int  # реальный бонус (масштабируется по энергии)
+    power_bonus: int            # базовый бонус (при 100% голода и энергии)
+    effective_power_bonus: int  # реальный бонус (масштабируется по энергии и голоду)
     gold_bonus: int
     energy: int
     max_energy: int
     energy_regen_seconds: int
-    energy_next_in: int    # секунд до следующего +1 энергии (0 = полная энергия)
+    energy_next_in: int         # секунд до следующего +1 энергии (0 = полная)
     last_battle_at: Optional[str]
     can_battle: bool
     battle_cooldown_seconds: int
+    # Голод
+    hunger: int                 # 0-100
+    hunger_status: str          # "Сытый" / "Голодный" / "Умирает"
+    hunger_deple_seconds: int   # секунд до следующего -1 голода
 
     model_config = {"from_attributes": True}
 
@@ -77,13 +81,36 @@ class BuyEggRequest(BaseModel):
 
 
 class BuyEggResult(BaseModel):
+    egg_id: int
+    egg_name: str
+    pet_type: str           # предопределённый тип (показываем игроку)
+    rarity: str
+    hatches_at: str         # ISO datetime когда можно вылупить
+    hatch_seconds: int      # секунд до вылупления
+    coins_spent: int
+    new_balance: int
+    message: str
+
+
+class EggOut(BaseModel):
+    id: int
+    egg_type: str           # common / rare / elite
+    pet_type: str
+    pet_name: str           # имя питомца который вылупится
+    pet_emoji: str
+    rarity: str
+    hatches_at: str         # ISO datetime
+    hatch_seconds_left: int # секунд до вылупления (0 = готово)
+    is_ready: bool
+    created_at: str
+
+
+class HatchEggResult(BaseModel):
     pet_name: str
     pet_type: str
     rarity: str
     power_bonus: int
     gold_bonus: int
-    coins_spent: int
-    new_balance: int
     message: str
 
 
@@ -100,4 +127,34 @@ class PetBattleResult(BaseModel):
     pet_energy_spent: int       # сколько потратил питомец
     pet_energy_left: int
     player_energy_left: int
+    message: str
+
+
+# ── Еда для питомцев ──────────────────────────────────────────────────────────
+class FoodItem(BaseModel):
+    food_type: str   # basic / premium
+    name: str
+    emoji: str
+    description: str
+    cost: int
+    hunger_restore: int   # сколько голода восстанавливает (-1 = полное)
+
+
+class FeedPetRequest(BaseModel):
+    pet_id: int
+    food_type: str   # basic / premium
+
+
+class FeedPetResult(BaseModel):
+    pet_name: str
+    food_name: str
+    hunger_before: int
+    hunger_after: int
+    coins_spent: int
+    new_balance: int
+    message: str
+
+
+class ReleasePetResult(BaseModel):
+    pet_name: str
     message: str

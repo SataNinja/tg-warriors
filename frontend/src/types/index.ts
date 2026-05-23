@@ -135,6 +135,9 @@ export interface PetOut {
   last_battle_at: string | null
   can_battle: boolean
   battle_cooldown_seconds: number
+  hunger: number
+  hunger_status: string
+  hunger_deple_seconds: number
 }
 
 export interface PetBattleResult {
@@ -146,5 +149,58 @@ export interface PetBattleResult {
   pet_energy_spent: number
   pet_energy_left: number
   player_energy_left: number
+  message: string
+}
+
+export interface EggOut {
+  id: number
+  egg_type: string
+  pet_type: string
+  pet_name: string
+  pet_emoji: string
+  rarity: string
+  hatches_at: string
+  hatch_seconds_left: number
+  is_ready: boolean
+  created_at: string
+}
+
+export interface HatchEggResult {
+  pet_name: string
+  pet_type: string
+  rarity: string
+  power_bonus: number
+  gold_bonus: number
+  message: string
+}
+
+export interface BuyEggResult {
+  egg_id: number
+  egg_name: string
+  pet_type: string
+  rarity: string
+  hatches_at: string
+  hatch_seconds: number
+  coins_spent: number
+  new_balance: number
+  message: string
+}
+
+export interface FoodItem {
+  food_type: string
+  name: string
+  emoji: string
+  description: string
+  cost: number
+  hunger_restore: number
+}
+
+export interface FeedPetResult {
+  pet_name: string
+  food_name: string
+  hunger_before: number
+  hunger_after: number
+  coins_spent: number
+  new_balance: number
   message: string
 }

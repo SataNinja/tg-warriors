@@ -119,11 +119,26 @@ CREATE TABLE IF NOT EXISTS pets (
     energy              INTEGER     NOT NULL DEFAULT 20,
     energy_updated_at   TIMESTAMPTZ,
     last_battle_at      TIMESTAMPTZ,
+    hunger              INTEGER     NOT NULL DEFAULT 100,
+    hunger_updated_at   TIMESTAMPTZ,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Добавляем is_revenged для существующих БД
+-- ── Яйца ─────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS eggs (
+    id          SERIAL      PRIMARY KEY,
+    owner_id    BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    egg_type    VARCHAR(16) NOT NULL,
+    pet_type    VARCHAR(16) NOT NULL,
+    hatches_at  TIMESTAMPTZ NOT NULL,
+    is_hatched  BOOLEAN     NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Добавляем колонки для существующих БД
 ALTER TABLE raids ADD COLUMN IF NOT EXISTS is_revenged BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE pets  ADD COLUMN IF NOT EXISTS hunger INTEGER NOT NULL DEFAULT 100;
+ALTER TABLE pets  ADD COLUMN IF NOT EXISTS hunger_updated_at TIMESTAMPTZ;
 
 -- ── Индексы ─────────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_units_owner       ON units(owner_id);

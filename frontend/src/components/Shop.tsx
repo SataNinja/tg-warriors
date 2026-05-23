@@ -217,9 +217,9 @@ function WeaponTab({ onRefresh, userCoins, userIron }: { onRefresh: () => void; 
 
 // ── Вкладка Питомцы (магазин) ──────────────────────────────────────────────
 const EGGS = [
-  { type: 'common', name: 'Обычное яйцо', emoji: '🥚', cost: 200, desc: 'Волк или Ворон' },
-  { type: 'rare',   name: 'Редкое яйцо',  emoji: '🔮', cost: 500, desc: 'Волк, Ворон или Медведь' },
-  { type: 'elite',  name: 'Элитное яйцо', emoji: '💎', cost: 1200, desc: 'Медведь или Феникс' },
+  { type: 'common', name: 'Обычное яйцо',  emoji: '🥚', cost: 200,  hatch: '2 ч',  desc: '10 обычных питомцев' },
+  { type: 'rare',   name: 'Редкое яйцо',   emoji: '🔮', cost: 500,  hatch: '6 ч',  desc: '10 редких питомцев' },
+  { type: 'elite',  name: 'Элитное яйцо',  emoji: '💎', cost: 1200, hatch: '12 ч', desc: '10 эпических/легендарных' },
 ]
 
 function PetsShopTab({ onRefresh, userCoins }: { onRefresh: () => void; userCoins: number }) {
@@ -241,7 +241,8 @@ function PetsShopTab({ onRefresh, userCoins }: { onRefresh: () => void; userCoin
   return (
     <div>
       <div style={styles.petsHint}>
-        Питомцы дают бонус к силе и монетам. Бои питомцев — во вкладке 🐾
+        Питомцы дают бонус к силе и монетам.<br />
+        Яйцо вылупляется через время — следи в 🐾 Питомцы → Яйца
       </div>
       {EGGS.map(egg => (
         <div key={egg.type} style={styles.eggCard}>
@@ -249,6 +250,7 @@ function PetsShopTab({ onRefresh, userCoins }: { onRefresh: () => void; userCoin
           <div style={{ flex: 1 }}>
             <div style={styles.eggName}>{egg.name}</div>
             <div style={styles.eggDesc}>{egg.desc}</div>
+            <div style={{ fontSize: 11, color: '#fbbf24', marginTop: 2 }}>⏳ Инкубация: {egg.hatch}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ ...styles.upgradeCost, color: userCoins >= egg.cost ? '#4ade80' : '#f87171', marginBottom: 4 }}>

@@ -124,3 +124,28 @@ export async function doPetBattle(petId: number) {
   const { data } = await api.post('/pets/battle', { pet_id: petId })
   return data
 }
+
+export async function releasePet(petId: number) {
+  const { data } = await api.post(`/pets/${petId}/release`)
+  return data
+}
+
+export async function feedPet(petId: number, foodType: string) {
+  const { data } = await api.post(`/pets/${petId}/feed`, { pet_id: petId, food_type: foodType })
+  return data
+}
+
+export async function fetchEggs() {
+  const { data } = await api.get('/pets/eggs')
+  return data
+}
+
+export async function hatchEgg(eggId: number) {
+  const { data } = await api.post(`/pets/eggs/${eggId}/hatch`)
+  return data
+}
+
+export async function fetchFoodList() {
+  const { data } = await api.get('/shop/food')
+  return data
+}
