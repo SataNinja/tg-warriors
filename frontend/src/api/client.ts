@@ -72,3 +72,8 @@ export async function fetchLeaderboard() {
   const { data } = await api.get('/leaderboard')
   return data
 }
+
+export async function fetchBattles() {
+  const { data } = await api.get('/raid/journal')
+  return data
+}

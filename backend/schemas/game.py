@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel
 
 
@@ -24,10 +25,6 @@ class PveRaidResult(BaseModel):
     energy_left: int
 
 
-class ShieldRequest(BaseModel):
-    pass
-
-
 class ShieldResult(BaseModel):
     shield_until: str
     cost: int
@@ -52,6 +49,19 @@ class LeaderboardEntry(BaseModel):
     nickname: str | None
     coins: int
     total_power: int
+
+
+class BattleEntry(BaseModel):
+    id: str
+    is_attack: bool           # True = я атаковал, False = меня атаковали
+    opponent_id: int
+    opponent_name: str
+    success: bool             # True = атакующий победил
+    coins_delta: int          # сколько монет я получил (+ или -)
+    my_power: int
+    opponent_power: int
+    can_revenge: bool         # кнопка мести: я проиграл как защитник
+    created_at: datetime
 
 
 class NotificationOut(BaseModel):

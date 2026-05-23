@@ -54,6 +54,19 @@ export interface PveRaidResult {
   energy_left: number
 }
 
+export interface BattleEntry {
+  id: string
+  is_attack: boolean
+  opponent_id: number
+  opponent_name: string
+  success: boolean
+  coins_delta: number
+  my_power: number
+  opponent_power: number
+  can_revenge: boolean
+  created_at: string
+}
+
 export interface LeaderboardEntry {
   rank: number
   user_id: number

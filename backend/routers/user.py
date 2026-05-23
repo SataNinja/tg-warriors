@@ -26,10 +26,7 @@ async def get_state(current_user: User = Depends(get_current_user)):
     if current_user.last_daily_reward:
         can_claim_daily = n >= current_user.last_daily_reward + timedelta(hours=24)
 
-    raid_cooldown_remaining = 0
-    if current_user.last_raid_at:
-        elapsed = (n - current_user.last_raid_at).total_seconds()
-        raid_cooldown_remaining = max(0, int(settings.RAID_COOLDOWN_SECONDS - elapsed))
+    raid_cooldown_remaining = 0  # кулдаун отключён
 
     shield_active = bool(current_user.shield_until and current_user.shield_until > n)
 
