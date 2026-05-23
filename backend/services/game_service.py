@@ -53,7 +53,19 @@ async def _spend_energy(db: AsyncSession, user: User, amount: int = ENERGY_PER_R
 
 # ── Вспомогательные ───────────────────────────────────────────────────────────
 _PET_MAX_ENERGY = 20
+_PET_MAX_HUNGER = 100
 _PET_ENERGY_REGEN_SECONDS = 600
+
+# ── Matchup-матрица (атакующий тип → защитник тип → множитель силы) ───────────
+_MATCHUP: dict[str, dict[str, float]] = {
+    "infantry": {"cavalry": 1.15, "ranged": 0.90, "magic": 1.00, "divine": 0.95, "siege": 1.00, "special": 1.00, "infantry": 1.00},
+    "ranged":   {"infantry": 1.15,"cavalry": 0.85, "magic": 1.00, "divine": 1.00, "siege": 0.90, "special": 1.00, "ranged": 1.00},
+    "cavalry":  {"ranged": 1.15,  "infantry": 0.90,"magic": 0.80, "divine": 0.90, "siege": 1.00, "special": 1.00, "cavalry": 1.00},
+    "magic":    {"cavalry": 1.20, "infantry": 1.00,"ranged": 1.00,"divine": 0.85, "siege": 0.90, "special": 1.00, "magic": 1.00},
+    "siege":    {"infantry": 1.10,"ranged": 1.10,  "cavalry": 1.10,"magic": 0.80, "divine": 0.90,"special": 1.00, "siege": 1.00},
+    "divine":   {"magic": 1.20,   "siege": 1.10,   "infantry": 1.05,"ranged": 1.00,"cavalry": 1.10,"special": 1.00,"divine": 1.00},
+    "special":  {"infantry": 1.05,"ranged": 1.05,  "cavalry": 1.05,"magic": 1.05, "divine": 0.95,"siege": 1.00,  "special": 1.00},
+}
 
 
 def _get_pet_current_energy(pet) -> int:
@@ -63,6 +75,42 @@ def _get_pet_current_energy(pet) -> int:
     elapsed = (now_utc() - pet.energy_updated_at).total_seconds()
     regenerated = int(elapsed // _PET_ENERGY_REGEN_SECONDS)
     return min(_PET_MAX_ENERGY, pet.energy + regenerated)
+
+
+def _get_pet_current_hunger(pet) -> int:
+    """Рассчитывает текущий голод питомца (без импорта pet_service)."""
+    HUNGER_DEPLE_SECONDS = 1200  # -1% каждые 20 мин = -3%/час
+    if pet.hunger_updated_at is None:
+        return pet.hunger
+    elapsed = (now_utc() - pet.hunger_updated_at).total_seconds()
+    depleted = int(elapsed // HUNGER_DEPLE_SECONDS)
+    return max(0, pet.hunger - depleted)
+
+
+def _avg_pet_hunger(pets) -> float:
+    """Средний голод питомцев (0-100). Если нет питомцев — 100 (нет штрафа)."""
+    if not pets:
+        return 100.0
+    return sum(_get_pet_current_hunger(p) for p in pets) / len(pets)
+
+
+def _dominant_category(units: list[Unit]) -> str:
+    """Доминирующая категория юнитов в армии (по количеству)."""
+    from services.shop_service import UNIT_TYPES
+    counts: dict[str, int] = {}
+    for u in units:
+        cat = UNIT_TYPES.get(u.unit_type, {}).get("category", "infantry")
+        counts[cat] = counts.get(cat, 0) + 1
+    return max(counts, key=lambda c: counts[c]) if counts else "infantry"
+
+
+def _matchup_multiplier(attacker_units: list[Unit], defender_units: list[Unit]) -> float:
+    """Множитель силы атакующего на основе matchup типов армий."""
+    if not attacker_units or not defender_units:
+        return 1.0
+    atk_cat = _dominant_category(attacker_units)
+    def_cat = _dominant_category(defender_units)
+    return _MATCHUP.get(atk_cat, {}).get(def_cat, 1.0)
 
 
 def _total_power(units: list[Unit], weapon=None, pets=None) -> int:
@@ -79,27 +127,79 @@ def _total_power(units: list[Unit], weapon=None, pets=None) -> int:
     return base + weapon_bonus + pet_bonus
 
 
+def _apply_battle_modifiers(
+    attacker: User, defender: User,
+    atk_power: int, def_power: int,
+    is_pve: bool = False
+) -> tuple[int, int]:
+    """
+    Применяет дополнительные модификаторы к силам сторон:
+    1. Бонус уровня замка (+2% за каждый уровень выше, макс +20%)
+    2. Штраф голода питомцев (avg hunger < 30% → -15%)
+    3. Matchup типов юнитов (только PvP)
+    Возвращает (atk_power_modified, def_power_modified).
+    """
+    # 1. Бонус замка атакующего над защитником
+    if not is_pve:
+        castle_diff = attacker.castle_level - defender.castle_level
+        castle_bonus = max(0, min(10, castle_diff)) * 0.02  # +2% за уровень, max +20%
+        atk_power = int(atk_power * (1.0 + castle_bonus))
+
+        # Аналогично для защитника (если его замок выше)
+        def_castle_bonus = max(0, min(10, -castle_diff)) * 0.02
+        def_power = int(def_power * (1.0 + def_castle_bonus))
+
+    # 2. Штраф голода питомцев
+    if _avg_pet_hunger(attacker.pets) < 30:
+        atk_power = int(atk_power * 0.85)
+    if not is_pve and _avg_pet_hunger(defender.pets) < 30:
+        def_power = int(def_power * 0.85)
+
+    # 3. Matchup типов юнитов (только PvP)
+    if not is_pve:
+        mult = _matchup_multiplier(attacker.units, defender.units)
+        atk_power = int(atk_power * mult)
+
+    return atk_power, def_power
+
+
 def _display_name(user: User) -> str:
     return user.nickname or user.first_name
 
 
 # ── Юниты ─────────────────────────────────────────────────────────────────────
-async def buy_unit(db: AsyncSession, user: User) -> Unit:
-    from services.shop_service import get_castle_max_units
+async def buy_unit(db: AsyncSession, user: User, unit_type: str = "warrior") -> Unit:
+    from services.shop_service import get_castle_max_units, UNIT_TYPES
     max_units = get_castle_max_units(user.castle_level)
     if len(user.units) >= max_units:
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
                             f"Лимит юнитов {max_units}. Улучши замок!")
+
+    # Проверяем тип юнита
+    utype = UNIT_TYPES.get(unit_type)
+    if not utype:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Неизвестный тип юнита")
+    if utype["castle_req"] > user.castle_level:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            f"Для {utype['name']} нужен замок уровня {utype['castle_req']}")
+
     # Цена растёт с каждым купленным юнитом: base × 1.12^count
     base_cost = settings.UNIT_BUY_COST
     price = int(base_cost * (1.12 ** len(user.units)))
     if user.coins < price:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Нужно {price} монет")
+
     user.coins -= price
-    unit = Unit(owner_id=user.id)
+    unit = Unit(
+        owner_id=user.id,
+        name=utype["name"],
+        unit_type=unit_type,
+        power=utype["base_power"],
+        defense=utype["base_defense"],
+    )
     db.add(unit)
     db.add(Transaction(user_id=user.id, amount=-price,
-                       type="buy_unit", description="Покупка юнита Warrior"))
+                       type="buy_unit", description=f"Покупка юнита {utype['name']}"))
     await db.commit()
     await db.refresh(unit)
     return unit
@@ -158,9 +258,14 @@ async def do_raid(db: AsyncSession, attacker: User, target_id: int) -> RaidResul
     if attacker_power == 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нужен хотя бы один юнит")
 
-    # Случайный бросок: ±25% к силе каждой стороны — слабый может победить, но с меньшим шансом
-    attacker_roll = attacker_power * random.uniform(0.75, 1.25)
-    defender_roll = defender_power * random.uniform(0.75, 1.25)
+    # Применяем модификаторы: замок, голод питомцев, matchup типов юнитов
+    attacker_power, defender_power = _apply_battle_modifiers(
+        attacker, defender, attacker_power, defender_power, is_pve=False
+    )
+
+    # Случайный бросок: ±40% к силе каждой стороны — увеличена случайность
+    attacker_roll = attacker_power * random.uniform(0.60, 1.40)
+    defender_roll = defender_power * random.uniform(0.60, 1.40)
     success = attacker_roll > defender_roll
     coins_stolen = 0
 
@@ -228,9 +333,15 @@ async def do_pve_raid(db: AsyncSession, attacker: User) -> PveRaidResult:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нужен хотя бы один юнит")
 
     bot_power = max(1, int(attacker_power * random.uniform(0.7, 1.3)))
-    # Случайный бросок: игрок тоже кидает ±25%
-    attacker_roll = attacker_power * random.uniform(0.75, 1.25)
-    bot_roll = bot_power * random.uniform(0.75, 1.25)
+
+    # Применяем модификаторы для PvE: только голод питомцев атакующего
+    attacker_power, bot_power = _apply_battle_modifiers(
+        attacker, attacker, attacker_power, bot_power, is_pve=True
+    )
+
+    # Случайный бросок: ±40% к силе каждой стороны — увеличена случайность
+    attacker_roll = attacker_power * random.uniform(0.60, 1.40)
+    bot_roll = bot_power * random.uniform(0.60, 1.40)
     success = attacker_roll > bot_roll
     coins_earned = 0
     coins_lost = 0

@@ -3,11 +3,12 @@ import { GameState } from '../types'
 import { Profile } from '../components/Profile'
 import { DailyReward } from '../components/DailyReward'
 import { UnitCard } from '../components/UnitCard'
+import { UnitShop } from '../components/UnitShop'
 import { RaidPanel } from '../components/RaidPanel'
 import { Leaderboard } from '../components/Leaderboard'
 import { Shop } from '../components/Shop'
 import { PetPanel } from '../components/PetPanel'
-import { buyUnit, buyShield } from '../api/client'
+import { buyShield } from '../api/client'
 
 type Tab = 'main' | 'units' | 'raid' | 'shop' | 'pets' | 'leaderboard'
 
@@ -18,7 +19,6 @@ interface Props {
 
 export function HomePage({ gameState, onRefresh }: Props) {
   const [tab, setTab] = useState<Tab>('main')
-  const [buyLoading, setBuyLoading] = useState(false)
   const [shieldLoading, setShieldLoading] = useState(false)
 
   const {
@@ -28,16 +28,6 @@ export function HomePage({ gameState, onRefresh }: Props) {
 
   const botUsername = import.meta.env.VITE_BOT_USERNAME ?? 'YOUR_BOT'
   const refLink = `https://t.me/${botUsername}?start=ref_${user.id}`
-
-  // Цена покупки следующего юнита (растёт 1.12^count)
-  const nextUnitPrice = Math.round(50 * (1.12 ** user.units.length))
-
-  const handleBuyUnit = async () => {
-    setBuyLoading(true)
-    try { await buyUnit(); onRefresh() }
-    catch (e: any) { alert(e?.response?.data?.detail ?? 'Ошибка покупки') }
-    finally { setBuyLoading(false) }
-  }
 
   const handleBuyShield = async () => {
     setShieldLoading(true)
@@ -91,8 +81,8 @@ export function HomePage({ gameState, onRefresh }: Props) {
             />
 
             <div style={styles.actions}>
-              <button onClick={handleBuyUnit} disabled={buyLoading} style={styles.actionBtn}>
-                {buyLoading ? '...' : `🧑‍⚔️ Нанять Warrior (${nextUnitPrice} 💰)`}
+              <button onClick={() => setTab('units')} style={styles.actionBtn}>
+                ⚔️ Нанять юнита
               </button>
               {!shield_active && (
                 <button onClick={handleBuyShield} disabled={shieldLoading}
@@ -125,17 +115,23 @@ export function HomePage({ gameState, onRefresh }: Props) {
         {/* ── Юниты ── */}
         {tab === 'units' && (
           <div>
-            {user.units.length === 0 ? (
-              <div style={styles.empty}>Нет юнитов. Купи Warrior на главной!</div>
-            ) : (
+            {/* Магазин юнитов */}
+            <div style={styles.sectionTitle}>🏪 Нанять юнита</div>
+            <UnitShop
+              unitCount={user.units.length}
+              userCoins={user.coins}
+              onBought={onRefresh}
+            />
+
+            {/* Список армии */}
+            {user.units.length > 0 && (
               <>
-                <div style={styles.unitsTotal}>
-                  Всего юнитов: <b>{user.units.length}</b> &nbsp;·&nbsp;
-                  Сила: <b style={{ color: '#FFD700' }}>
-                    {user.units.reduce((s, u) => s + u.power, 0)}
-                  </b>
+                <div style={{ ...styles.sectionTitle, marginTop: 18 }}>
+                  ⚔️ Армия &nbsp;
+                  <span style={{ fontWeight: 400, opacity: 0.6, fontSize: 13 }}>
+                    {user.units.length} юн. · 💥{user.units.reduce((s, u) => s + u.power, 0)} сила
+                  </span>
                 </div>
-                {/* Группируем по типу юнита (или имени, если unit_type ещё нет) */}
                 {Object.values(
                   user.units.reduce((acc, u) => {
                     const key = u.unit_type ?? u.name
@@ -206,8 +202,8 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 8, padding: '8px 10px'
   },
   empty: { opacity: 0.6, fontSize: 14, textAlign: 'center', marginTop: 24 },
-  unitsTotal: {
-    fontSize: 13, opacity: 0.6, textAlign: 'center' as const,
-    marginBottom: 10, padding: '6px 0',
-  }
+  sectionTitle: {
+    fontWeight: 700, fontSize: 14, marginBottom: 10,
+    paddingBottom: 6, borderBottom: '1px solid rgba(255,255,255,0.08)',
+  },
 }

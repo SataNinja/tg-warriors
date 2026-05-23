@@ -15,6 +15,60 @@ from schemas.shop import (
     BuyEggResult, FoodItem, FeedPetResult,
 )
 
+# ── Типы юнитов (20 типов, открываются с ростом замка) ───────────────────────
+UNIT_TYPES: dict[str, dict] = {
+    "warrior":       {"name": "Воин",                  "emoji": "⚔️",  "castle_req": 1,  "base_power": 10, "base_defense": 5,  "category": "infantry",
+                      "desc": "Базовый воин. Хорош против кавалерии."},
+    "archer":        {"name": "Лучник",                "emoji": "🏹",  "castle_req": 2,  "base_power": 12, "base_defense": 3,  "category": "ranged",
+                      "desc": "Дальний бой. Бьёт пехоту, уязвим к кавалерии."},
+    "knight":        {"name": "Рыцарь",                "emoji": "🐴",  "castle_req": 3,  "base_power": 14, "base_defense": 6,  "category": "cavalry",
+                      "desc": "Мобильный. Бьёт лучников, уязвим к пехоте."},
+    "mage":          {"name": "Маг",                   "emoji": "🔮",  "castle_req": 4,  "base_power": 16, "base_defense": 2,  "category": "magic",
+                      "desc": "Пробивает броню. Бьёт кавалерию, уязвим к divine."},
+    "spearman":      {"name": "Копейщик",              "emoji": "🗡️",  "castle_req": 5,  "base_power": 11, "base_defense": 8,  "category": "infantry",
+                      "desc": "Антикавалерия. Усиленная пехота."},
+    "crossbow":      {"name": "Арбалетчик",            "emoji": "🎯",  "castle_req": 6,  "base_power": 15, "base_defense": 4,  "category": "ranged",
+                      "desc": "Тяжёлый лучник. Бронебойные болты."},
+    "paladin":       {"name": "Паладин",               "emoji": "✝️",  "castle_req": 7,  "base_power": 13, "base_defense": 12, "category": "divine",
+                      "desc": "Святой воин. Высокая защита, бьёт магию."},
+    "catapult":      {"name": "Катапульта",            "emoji": "💥",  "castle_req": 8,  "base_power": 20, "base_defense": 1,  "category": "siege",
+                      "desc": "Массовый урон. Слаб против магии."},
+    "assassin":      {"name": "Ассасин",               "emoji": "🥷",  "castle_req": 9,  "base_power": 18, "base_defense": 3,  "category": "special",
+                      "desc": "Первый удар. Случайный мощный бонус к атаке."},
+    "berserker":     {"name": "Берсерк",               "emoji": "💢",  "castle_req": 10, "base_power": 22, "base_defense": 2,  "category": "infantry",
+                      "desc": "Огромная атака, почти нет защиты."},
+    "dragon_rider":  {"name": "Наездник Дракона",      "emoji": "🐲",  "castle_req": 11, "base_power": 25, "base_defense": 7,  "category": "cavalry",
+                      "desc": "Летящий. Не получает штраф от matchup."},
+    "warlock":       {"name": "Чернокнижник",          "emoji": "🌑",  "castle_req": 12, "base_power": 24, "base_defense": 3,  "category": "magic",
+                      "desc": "Проклятие: снижает силу врага на 10%."},
+    "death_knight":  {"name": "Рыцарь Смерти",         "emoji": "💀",  "castle_req": 13, "base_power": 28, "base_defense": 8,  "category": "infantry",
+                      "desc": "Нежить. Второй шанс при наличии 2+ юнитов этого типа."},
+    "titan":         {"name": "Титан",                 "emoji": "🗿",  "castle_req": 14, "base_power": 30, "base_defense": 10, "category": "siege",
+                      "desc": "Огромная атака и защита."},
+    "demon_lord":    {"name": "Демон-Лорд",            "emoji": "😈",  "castle_req": 15, "base_power": 35, "base_defense": 5,  "category": "special",
+                      "desc": "Хаос: ±50% рандом к броску."},
+    "phoenix_guard": {"name": "Страж Феникса",         "emoji": "🔥",  "castle_req": 16, "base_power": 32, "base_defense": 9,  "category": "divine",
+                      "desc": "Огонь: +5% к силе за каждые 5 побед в серии."},
+    "golem":         {"name": "Голем Войны",           "emoji": "🤖",  "castle_req": 17, "base_power": 38, "base_defense": 15, "category": "siege",
+                      "desc": "Поглощает первый удар: снижает рандом врага."},
+    "angel":         {"name": "Архангел",              "emoji": "👼",  "castle_req": 18, "base_power": 36, "base_defense": 12, "category": "divine",
+                      "desc": "+20% к total power всех союзных юнитов."},
+    "void_walker":   {"name": "Пожиратель Пространства","emoji": "🌌", "castle_req": 19, "base_power": 42, "base_defense": 6,  "category": "special",
+                      "desc": "30% шанс удвоить урон в броске."},
+    "god_warrior":   {"name": "Бог Войны",             "emoji": "☀️",  "castle_req": 20, "base_power": 50, "base_defense": 20, "category": "divine",
+                      "desc": "Все matchup бонусы применяются к этому юниту."},
+}
+
+
+def get_available_unit_types(castle_level: int) -> list[dict]:
+    """Возвращает типы юнитов, доступные для покупки на данном уровне замка."""
+    return [
+        {"unit_type": k, **v}
+        for k, v in UNIT_TYPES.items()
+        if v["castle_req"] <= castle_level
+    ]
+
+
 # ── Данные замка ──────────────────────────────────────────────────────────────
 CASTLE_DATA = {
     1:  {"name": "Деревня",                 "max_units": 3,  "income_bonus": 0},

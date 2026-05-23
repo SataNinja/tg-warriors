@@ -21,7 +21,7 @@ class UnitOut(BaseModel):
 
 
 class BuyUnitRequest(BaseModel):
-    pass  # покупка стандартного юнита, без параметров
+    unit_type: str = "warrior"  # тип покупаемого юнита
 
 
 class UpgradeUnitRequest(BaseModel):

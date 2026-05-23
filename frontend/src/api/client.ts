@@ -33,9 +33,25 @@ export async function setNickname(nickname: string) {
   return data
 }
 
-export async function buyUnit() {
-  const { data } = await api.post('/unit/buy')
+export async function buyUnit(unitType: string = 'warrior') {
+  const { data } = await api.post('/unit/buy', { unit_type: unitType })
   return data
+}
+
+export async function fetchUnitTypes() {
+  const { data } = await api.get('/unit/types')
+  return data as UnitTypeInfo[]
+}
+
+export interface UnitTypeInfo {
+  unit_type: string
+  name: string
+  emoji: string
+  castle_req: number
+  base_power: number
+  base_defense: number
+  category: string
+  desc: string
 }
 
 export async function upgradeUnit(unitId: string) {
