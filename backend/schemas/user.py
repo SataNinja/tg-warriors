@@ -18,6 +18,7 @@ class UserOut(BaseModel):
     energy: int
     castle_level: int = 1
     win_streak: int = 0
+    daily_streak: int = 0
     shield_until: Optional[datetime]
     last_daily_reward: Optional[datetime]
     units: list[UnitOut] = []
@@ -33,13 +34,14 @@ class UserOut(BaseModel):
 class GameStateOut(BaseModel):
     user: UserOut
     can_claim_daily: bool
-    daily_reward_coins: int
-    daily_next_at: Optional[datetime]   # когда можно забрать следующую награду
+    daily_reward_coins: int      # следующая награда (динамическая по стрику)
+    daily_next_at: Optional[datetime]
+    daily_streak: int = 0        # текущий стрик
     raid_cooldown_remaining: int
     shield_active: bool
     energy: int
     max_energy: int
-    energy_regen_seconds: int           # секунд до +1 энергии (точный таймер)
+    energy_regen_seconds: int
     energy_regen_minutes: int
 
 

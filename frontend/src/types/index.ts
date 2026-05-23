@@ -31,8 +31,9 @@ export interface User {
 export interface GameState {
   user: User
   can_claim_daily: boolean
-  daily_reward_coins: number
+  daily_reward_coins: number   // следующая награда (по стрику)
   daily_next_at: string | null
+  daily_streak: number
   raid_cooldown_remaining: number
   shield_active: boolean
   energy: number

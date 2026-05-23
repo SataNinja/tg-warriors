@@ -240,7 +240,9 @@ async def hatch_egg(db: AsyncSession, user: User, egg_id: int) -> HatchEggResult
         power_bonus=pt.get("power_bonus", 0),
         gold_bonus=pt.get("gold_bonus", 0),
         energy=PET_MAX_ENERGY,
+        energy_updated_at=now_utc(),
         hunger=PET_MAX_HUNGER,
+        hunger_updated_at=now_utc(),  # фикс: без этого голод никогда не уменьшается
     )
     db.add(pet)
     egg.is_hatched = True

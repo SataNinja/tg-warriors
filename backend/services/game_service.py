@@ -158,7 +158,10 @@ async def do_raid(db: AsyncSession, attacker: User, target_id: int) -> RaidResul
     if attacker_power == 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нужен хотя бы один юнит")
 
-    success = attacker_power > defender_power
+    # Случайный бросок: ±25% к силе каждой стороны — слабый может победить, но с меньшим шансом
+    attacker_roll = attacker_power * random.uniform(0.75, 1.25)
+    defender_roll = defender_power * random.uniform(0.75, 1.25)
+    success = attacker_roll > defender_roll
     coins_stolen = 0
 
     if success:
@@ -225,7 +228,10 @@ async def do_pve_raid(db: AsyncSession, attacker: User) -> PveRaidResult:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нужен хотя бы один юнит")
 
     bot_power = max(1, int(attacker_power * random.uniform(0.7, 1.3)))
-    success = attacker_power > bot_power
+    # Случайный бросок: игрок тоже кидает ±25%
+    attacker_roll = attacker_power * random.uniform(0.75, 1.25)
+    bot_roll = bot_power * random.uniform(0.75, 1.25)
+    success = attacker_roll > bot_roll
     coins_earned = 0
     coins_lost = 0
 
@@ -366,21 +372,55 @@ async def activate_shield(db: AsyncSession, user: User) -> ShieldResult:
 
 
 # ── Ежедневная награда ────────────────────────────────────────────────────────
+DAILY_REWARDS = [50, 75, 120, 200, 240, 300, 700]  # 7-дневный цикл
+
+
+def get_daily_streak_reward(streak: int) -> int:
+    """Награда по текущему стрику (1-based, циклится каждые 7 дней)."""
+    idx = max(0, streak - 1) % len(DAILY_REWARDS)
+    return DAILY_REWARDS[idx]
+
+
+def get_next_daily_reward(user: User) -> int:
+    """Сколько монет получит пользователь при следующем входе."""
+    next_streak = (getattr(user, 'daily_streak', 0) or 0) + 1
+    return get_daily_streak_reward(next_streak)
+
+
 async def claim_daily_reward(db: AsyncSession, user: User) -> DailyRewardResult:
-    if user.last_daily_reward and now_utc() < user.last_daily_reward + timedelta(hours=24):
+    n = now_utc()
+    if user.last_daily_reward and n < user.last_daily_reward + timedelta(hours=24):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Уже получено сегодня")
-    user.coins += settings.DAILY_REWARD_COINS
-    user.last_daily_reward = now_utc()
-    # Кристалл за каждые 7 дней (win_streak используем как приблизительный счётчик)
+
+    streak = getattr(user, 'daily_streak', 0) or 0
+
+    # Сбрасываем стрик если пропустили больше 48 часов
+    if user.last_daily_reward and n > user.last_daily_reward + timedelta(hours=48):
+        streak = 0
+
+    streak += 1
+    reward = get_daily_streak_reward(streak)
+
+    user.coins += reward
+    user.last_daily_reward = n
+    user.daily_streak = streak
+
+    # День 7 цикла — бонус 3 кристалла
     crystals_bonus = 0
-    if user.win_streak > 0 and user.win_streak % 7 == 0:
-        crystals_bonus = 1
-        user.crystals = getattr(user, 'crystals', 0) + 1
-    db.add(Transaction(user_id=user.id, amount=settings.DAILY_REWARD_COINS,
-                       type="daily", description="Ежедневная награда"))
+    if streak % 7 == 0:
+        crystals_bonus = 3
+        user.crystals = getattr(user, 'crystals', 0) + crystals_bonus
+
+    db.add(Transaction(user_id=user.id, amount=reward,
+                       type="daily", description=f"Ежедневная награда (день {streak})"))
     await db.commit()
     await db.refresh(user)
-    return DailyRewardResult(coins_earned=settings.DAILY_REWARD_COINS, new_balance=user.coins)
+    return DailyRewardResult(
+        coins_earned=reward,
+        new_balance=user.coins,
+        streak=streak,
+        crystals_bonus=crystals_bonus,
+    )
 
 
 # ── Рефералы ──────────────────────────────────────────────────────────────────

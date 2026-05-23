@@ -33,6 +33,8 @@ class ShieldResult(BaseModel):
 class DailyRewardResult(BaseModel):
     coins_earned: int
     new_balance: int
+    streak: int = 1
+    crystals_bonus: int = 0
 
 
 class ReferralClaimResult(BaseModel):

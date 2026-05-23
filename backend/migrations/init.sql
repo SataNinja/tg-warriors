@@ -139,6 +139,7 @@ CREATE TABLE IF NOT EXISTS eggs (
 ALTER TABLE raids ADD COLUMN IF NOT EXISTS is_revenged BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE pets  ADD COLUMN IF NOT EXISTS hunger INTEGER NOT NULL DEFAULT 100;
 ALTER TABLE pets  ADD COLUMN IF NOT EXISTS hunger_updated_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_streak INTEGER NOT NULL DEFAULT 0;
 
 -- ── Индексы ─────────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_units_owner       ON units(owner_id);

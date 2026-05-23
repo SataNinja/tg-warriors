@@ -22,7 +22,7 @@ export function HomePage({ gameState, onRefresh }: Props) {
   const [shieldLoading, setShieldLoading] = useState(false)
 
   const {
-    user, can_claim_daily, daily_reward_coins, daily_next_at,
+    user, can_claim_daily, daily_reward_coins, daily_next_at, daily_streak,
     shield_active, energy, max_energy, energy_regen_seconds,
   } = gameState
 
@@ -86,6 +86,7 @@ export function HomePage({ gameState, onRefresh }: Props) {
               canClaim={can_claim_daily}
               rewardCoins={daily_reward_coins}
               dailyNextAt={daily_next_at}
+              streak={daily_streak}
               onClaimed={onRefresh}
             />
 

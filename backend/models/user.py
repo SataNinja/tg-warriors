@@ -24,6 +24,7 @@ class User(Base):
 
     shield_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_daily_reward: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    daily_streak: Mapped[int] = mapped_column(Integer, default=0)
     last_raid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     referrer_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)

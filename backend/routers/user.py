@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from models.user import User
 from routers.deps import get_current_user
 from schemas.user import UserOut, GameStateOut, NicknameRequest, NicknameResponse
-from services.game_service import now_utc, get_current_energy, energy_regen_eta, MAX_ENERGY
+from services.game_service import now_utc, get_current_energy, energy_regen_eta, MAX_ENERGY, get_next_daily_reward
 
 router = APIRouter(tags=["user"])
 
@@ -36,11 +36,15 @@ async def get_state(current_user: User = Depends(get_current_user)):
     current_energy = get_current_energy(current_user)
     regen_eta = energy_regen_eta(current_user) if current_energy < MAX_ENERGY else 0
 
+    next_reward = get_next_daily_reward(current_user)
+    streak = getattr(current_user, 'daily_streak', 0) or 0
+
     return GameStateOut(
         user=current_user,
         can_claim_daily=can_claim_daily,
-        daily_reward_coins=settings.DAILY_REWARD_COINS,
+        daily_reward_coins=next_reward,
         daily_next_at=daily_next_at,
+        daily_streak=streak,
         raid_cooldown_remaining=raid_cooldown_remaining,
         shield_active=shield_active,
         energy=current_energy,
