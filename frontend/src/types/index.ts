@@ -70,6 +70,7 @@ export interface BattleEntry {
   my_power: number
   opponent_power: number
   can_revenge: boolean
+  is_revenged: boolean
   created_at: string
 }
 

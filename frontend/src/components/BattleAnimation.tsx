@@ -7,6 +7,9 @@ interface Props {
   attackerCastleLevel?: number
   defenderCastleLevel?: number
   onComplete: () => void
+  /** Если бой восстанавливается после смены вкладки — передаём время старта и длину */
+  startedAt?: number
+  forcedDuration?: number
 }
 
 const CASTLE_EMOJIS: Record<number, string> = {
@@ -54,13 +57,19 @@ const PHASES = [
 export function BattleAnimation({
   attackerPower, defenderPower, isPve,
   attackerCastleLevel = 1, defenderCastleLevel = 1,
-  onComplete
+  onComplete,
+  startedAt,
+  forcedDuration,
 }: Props) {
-  const [progress, setProgress] = useState(0)
-  const [phase, setPhase] = useState(0)
+  // Если восстанавливаем бой — считаем начальный прогресс
+  const dur = useRef(forcedDuration ?? calcDuration(attackerPower, defenderPower))
+  const initProgress = startedAt
+    ? Math.min(99, ((Date.now() - startedAt) / dur.current) * 100)
+    : 0
+  const [progress, setProgress] = useState(initProgress)
+  const [phase, setPhase] = useState(Math.min(3, Math.floor(initProgress / 25)))
   const [soldiers, setSoldiers] = useState<Soldier[]>([])
   const [clashes, setClashes] = useState<Clash[]>([])
-  const dur = useRef(calcDuration(attackerPower, defenderPower))
   const soldierIdRef = useRef(0)
   const clashIdRef = useRef(0)
 
@@ -68,17 +77,17 @@ export function BattleAnimation({
   const defCastle = isPve ? '🤖' : (CASTLE_EMOJIS[defenderCastleLevel] ?? '🏘')
   const defPool = isPve ? BOT_UNITS : DEFENDER_UNITS
 
-  // Прогресс-бар
+  // Прогресс-бар (учитывает восстановление — стартует от реального времени)
   useEffect(() => {
-    const start = Date.now()
+    const origin = startedAt ?? Date.now()
     const id = setInterval(() => {
-      const pct = Math.min(100, ((Date.now() - start) / dur.current) * 100)
+      const pct = Math.min(100, ((Date.now() - origin) / dur.current) * 100)
       setProgress(pct)
       setPhase(Math.min(3, Math.floor(pct / 25)))
       if (pct >= 100) { clearInterval(id); onComplete() }
     }, 100)
     return () => clearInterval(id)
-  }, [onComplete])
+  }, [onComplete, startedAt])
 
   // Спавн солдат
   useEffect(() => {

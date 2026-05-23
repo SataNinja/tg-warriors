@@ -122,6 +122,9 @@ CREATE TABLE IF NOT EXISTS pets (
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Добавляем is_revenged для существующих БД
+ALTER TABLE raids ADD COLUMN IF NOT EXISTS is_revenged BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- ── Индексы ─────────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_units_owner       ON units(owner_id);
 CREATE INDEX IF NOT EXISTS idx_raids_attacker    ON raids(attacker_id);

@@ -60,7 +60,8 @@ class BattleEntry(BaseModel):
     coins_delta: int          # сколько монет я получил (+ или -)
     my_power: int
     opponent_power: int
-    can_revenge: bool         # кнопка мести: я проиграл как защитник
+    can_revenge: bool         # кнопка мести: я проиграл как защитник и ещё не мстил
+    is_revenged: bool         # True — месть уже была совершена
     created_at: datetime
 
 

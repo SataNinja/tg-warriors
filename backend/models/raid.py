@@ -20,5 +20,6 @@ class Raid(Base):
 
     success: Mapped[bool] = mapped_column(Boolean, default=False)
     coins_stolen: Mapped[int] = mapped_column(BigInteger, default=0)
+    is_revenged: Mapped[bool] = mapped_column(Boolean, default=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

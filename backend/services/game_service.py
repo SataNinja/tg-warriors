@@ -131,6 +131,19 @@ async def do_raid(db: AsyncSession, attacker: User, target_id: int) -> RaidResul
 
     await _spend_energy(db, attacker)
 
+    # Если атака — месть (attacker ранее проиграл этому игроку), помечаем старый рейд
+    avenged_q = await db.execute(
+        select(Raid).where(
+            Raid.attacker_id == target_id,
+            Raid.defender_id == attacker.id,
+            Raid.success == True,      # noqa: E712
+            Raid.is_revenged == False, # noqa: E712
+        ).order_by(Raid.created_at.desc()).limit(1)
+    )
+    avenged_raid = avenged_q.scalar_one_or_none()
+    if avenged_raid:
+        avenged_raid.is_revenged = True
+
     result = await db.execute(select(User).where(User.id == target_id))
     defender: Optional[User] = result.scalar_one_or_none()
     if not defender:
@@ -271,7 +284,7 @@ async def do_pve_raid(db: AsyncSession, attacker: User) -> PveRaidResult:
 
 
 # ── Журнал боёв ───────────────────────────────────────────────────────────────
-async def get_battle_journal(db: AsyncSession, user: User, limit: int = 30) -> list[BattleEntry]:
+async def get_battle_journal(db: AsyncSession, user: User, limit: int = 10) -> list[BattleEntry]:
     result = await db.execute(
         select(Raid).where(
             or_(Raid.attacker_id == user.id, Raid.defender_id == user.id)
@@ -319,8 +332,8 @@ async def get_battle_journal(db: AsyncSession, user: User, limit: int = 30) -> l
                 my_power = r.defender_power
                 opp_power = r.attacker_power
 
-            # Месть: меня атаковали и победили
-            can_revenge = (not is_attack) and r.success
+            # Месть: меня атаковали, победили, и я ещё не мстил
+            can_revenge = (not is_attack) and r.success and not r.is_revenged
 
         entries.append(BattleEntry(
             id=str(r.id),
@@ -332,6 +345,7 @@ async def get_battle_journal(db: AsyncSession, user: User, limit: int = 30) -> l
             my_power=my_power,
             opponent_power=opp_power,
             can_revenge=can_revenge,
+            is_revenged=r.is_revenged,
             created_at=r.created_at
         ))
 
