@@ -16,6 +16,7 @@ class Unit(Base):
     owner_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id", ondelete="CASCADE"))
 
     name: Mapped[str] = mapped_column(String(64), default="Warrior")
+    unit_type: Mapped[str] = mapped_column(String(32), default="warrior")
     level: Mapped[int] = mapped_column(Integer, default=1)
     power: Mapped[int] = mapped_column(Integer, default=10)   # влияет на урон в рейде
     defense: Mapped[int] = mapped_column(Integer, default=5)  # влияет на защиту при рейде

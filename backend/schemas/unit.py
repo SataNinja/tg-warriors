@@ -9,6 +9,7 @@ class UnitOut(BaseModel):
     id: uuid.UUID
     owner_id: int
     name: str
+    unit_type: str = "warrior"
     level: int
     power: int
     defense: int

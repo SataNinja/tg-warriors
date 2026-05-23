@@ -125,10 +125,33 @@ export function HomePage({ gameState, onRefresh }: Props) {
         {/* ── Юниты ── */}
         {tab === 'units' && (
           <div>
-            {user.units.length === 0
-              ? <div style={styles.empty}>Нет юнитов. Купи Warrior на главной!</div>
-              : user.units.map(u => <UnitCard key={u.id} unit={u} onUpgraded={onRefresh} />)
-            }
+            {user.units.length === 0 ? (
+              <div style={styles.empty}>Нет юнитов. Купи Warrior на главной!</div>
+            ) : (
+              <>
+                <div style={styles.unitsTotal}>
+                  Всего юнитов: <b>{user.units.length}</b> &nbsp;·&nbsp;
+                  Сила: <b style={{ color: '#FFD700' }}>
+                    {user.units.reduce((s, u) => s + u.power, 0)}
+                  </b>
+                </div>
+                {/* Группируем по типу юнита (или имени, если unit_type ещё нет) */}
+                {Object.values(
+                  user.units.reduce((acc, u) => {
+                    const key = u.unit_type ?? u.name
+                    if (!acc[key]) acc[key] = []
+                    acc[key].push(u)
+                    return acc
+                  }, {} as Record<string, typeof user.units>)
+                ).map(group => (
+                  <UnitCard
+                    key={group[0].unit_type ?? group[0].name}
+                    units={group}
+                    onUpgraded={onRefresh}
+                  />
+                ))}
+              </>
+            )}
           </div>
         )}
 
@@ -182,5 +205,9 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer', background: 'rgba(255,255,255,0.05)',
     borderRadius: 8, padding: '8px 10px'
   },
-  empty: { opacity: 0.6, fontSize: 14, textAlign: 'center', marginTop: 24 }
+  empty: { opacity: 0.6, fontSize: 14, textAlign: 'center', marginTop: 24 },
+  unitsTotal: {
+    fontSize: 13, opacity: 0.6, textAlign: 'center' as const,
+    marginBottom: 10, padding: '6px 0',
+  }
 }

@@ -52,35 +52,55 @@ function fmt(secs: number) {
 }
 
 // ── Мини-анимация боя питомцев ───────────────────────────────────────────────
+const PET_FIGHT_DURATION_MS = 6000  // 6 секунд
+
 function PetFightAnimation({ myEmoji, onDone }: { myEmoji: string; onDone: () => void }) {
-  const [frame, setFrame] = useState(0)
   const CLASH = ['💥', '⚡', '✨', '🔥', '💢']
-  const totalFrames = 30
-  const frameRef = useRef(0)
+  // Прогресс 0..1, считается от реального времени — не зависит от активности вкладки
+  const [progress, setProgress] = useState(0)
+  const startedAt = useRef(Date.now())
+  const doneRef = useRef(false)
 
   useEffect(() => {
+    doneRef.current = false
+    startedAt.current = Date.now()
+
     const id = setInterval(() => {
-      frameRef.current += 1
-      setFrame(frameRef.current)
-      if (frameRef.current >= totalFrames) { clearInterval(id); onDone() }
-    }, 200)
+      const elapsed = Date.now() - startedAt.current
+      const p = Math.min(1, elapsed / PET_FIGHT_DURATION_MS)
+      setProgress(p)
+      if (p >= 1 && !doneRef.current) {
+        doneRef.current = true
+        clearInterval(id)
+        onDone()
+      }
+    }, 100)  // опрашиваем каждые 100мс — точно, но не нагружает
+
     return () => clearInterval(id)
   }, [onDone])
 
-  const t = frame / totalFrames
+  const t = progress
   const myX = Math.min(35, t * 38)
   const botX = Math.max(55, 100 - t * 40)
   const clash = t > 0.45 && t < 0.8
+  // Используем время для выбора эффекта столкновения (не frame, чтобы не было прыжков)
+  const clashIdx = Math.floor(Date.now() / 300) % CLASH.length
 
   return (
     <div style={fightStyles.wrap}>
       <div style={fightStyles.title}>🥊 Бой питомцев!</div>
       <div style={fightStyles.arena}>
-        <span style={{ ...fightStyles.pet, left: `${myX}%`, transition: 'left 0.2s linear' }}>{myEmoji}</span>
-        <span style={{ ...fightStyles.pet, left: `${botX}%`, transform: 'scaleX(-1)', transition: 'left 0.2s linear' }}>🤖</span>
-        {clash && <span style={{ ...fightStyles.clash, left: '47%' }}>{CLASH[frame % CLASH.length]}</span>}
+        <span style={{ ...fightStyles.pet, left: `${myX}%`, transition: 'left 0.1s linear' }}>{myEmoji}</span>
+        <span style={{ ...fightStyles.pet, left: `${botX}%`, transform: 'scaleX(-1)', transition: 'left 0.1s linear' }}>🤖</span>
+        {clash && <span style={{ ...fightStyles.clash, left: '47%' }}>{CLASH[clashIdx]}</span>}
       </div>
-      <div style={fightStyles.label}>{t < 0.4 ? 'Питомцы сходятся...' : t < 0.7 ? 'Схватка!' : 'Исход решается...'}</div>
+      <div style={fightStyles.label}>
+        {t < 0.4 ? 'Питомцы сходятся...' : t < 0.7 ? 'Схватка!' : 'Исход решается...'}
+      </div>
+      {/* Прогресс-бар */}
+      <div style={fightStyles.track}>
+        <div style={{ ...fightStyles.fill, width: `${t * 100}%` }} />
+      </div>
     </div>
   )
 }
@@ -91,7 +111,9 @@ const fightStyles: Record<string, React.CSSProperties> = {
   arena: { height: 70, background: 'rgba(0,0,0,0.2)', borderRadius: 10, position: 'relative', overflow: 'hidden', marginBottom: 8 },
   pet: { position: 'absolute', top: '25%', fontSize: 32 },
   clash: { position: 'absolute', top: '15%', fontSize: 30, zIndex: 2 },
-  label: { textAlign: 'center', fontSize: 12, opacity: 0.7 },
+  label: { textAlign: 'center', fontSize: 12, opacity: 0.7, marginBottom: 8 },
+  track: { height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden', marginTop: 6 },
+  fill: { height: '100%', background: 'linear-gradient(90deg, #dc2626, #f59e0b)', borderRadius: 2, transition: 'width 0.1s' },
 }
 
 // ── Карточка яйца ─────────────────────────────────────────────────────────────

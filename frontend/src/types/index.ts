@@ -2,6 +2,7 @@ export interface Unit {
   id: string
   owner_id: number
   name: string
+  unit_type: string       // тип юнита (warrior, archer, knight и т.д.)
   level: number
   power: number
   defense: number
