@@ -1,15 +1,41 @@
 import asyncio
 import logging
+import secrets
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy import text
 
+from core.config import settings
 from core.database import engine, _get_db_url
 from routers import auth, user, unit, raid, shield, referral, leaderboard, daily, internal, shop, pets, admin, clans
 
 logger = logging.getLogger(__name__)
+
+_basic_security = HTTPBasic()
+
+
+def _verify_docs_access(credentials: HTTPBasicCredentials = Depends(_basic_security)):
+    """Проверяет Basic Auth для доступа к /docs. Константное время — защита от timing attack."""
+    ok_user = secrets.compare_digest(
+        credentials.username.encode("utf-8"),
+        settings.DOCS_USERNAME.encode("utf-8"),
+    )
+    ok_pass = secrets.compare_digest(
+        credentials.password.encode("utf-8"),
+        settings.DOCS_PASSWORD.encode("utf-8"),
+    )
+    if not (ok_user and ok_pass):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Неверные учётные данные",
+            headers={"WWW-Authenticate": "Basic"},
+        )
 
 
 async def run_migrations():
@@ -37,7 +63,15 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="TG Warriors API", version="1.0.0", lifespan=lifespan)
+# docs_url=None, redoc_url=None — отключаем стандартные открытые маршруты
+app = FastAPI(
+    title="TG Warriors API",
+    version="1.0.0",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,   # openapi.json тоже закрываем; раздаём через защищённый endpoint
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -61,6 +95,32 @@ app.include_router(pets.router)
 app.include_router(admin.router)
 app.include_router(clans.router)
 
+
+# ── Защищённая документация ───────────────────────────────────────────────────
+
+@app.get("/docs", include_in_schema=False)
+async def swagger_ui(_: None = Depends(_verify_docs_access)):
+    """Swagger UI — доступен только администратору (Basic Auth)."""
+    return get_swagger_ui_html(
+        openapi_url="/openapi.json",
+        title="TG Warriors API — Admin Docs",
+        swagger_favicon_url="https://fastapi.tiangolo.com/img/favicon.png",
+    )
+
+
+@app.get("/openapi.json", include_in_schema=False)
+async def openapi_schema(_: None = Depends(_verify_docs_access)):
+    """OpenAPI-схема — тоже закрыта Basic Auth."""
+    return JSONResponse(
+        get_openapi(
+            title=app.title,
+            version=app.version,
+            routes=app.routes,
+        )
+    )
+
+
+# ── Health ────────────────────────────────────────────────────────────────────
 
 @app.get("/health")
 async def health():

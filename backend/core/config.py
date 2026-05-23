@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str
 
+    # Docs Basic Auth (закрывает /docs от посторонних)
+    DOCS_USERNAME: str = "admin"
+    DOCS_PASSWORD: str = ""
+
     # Internal backend URL (используется ботом)
     BACKEND_URL: str = "http://backend:8000"
 
