@@ -7,8 +7,11 @@ interface Props {
   onUpgraded: () => void
 }
 
+const UNIT_UPGRADE_COST_BASE = 30
+
 export function UnitCard({ unit, onUpgraded }: Props) {
   const [loading, setLoading] = useState(false)
+  const upgradeCost = UNIT_UPGRADE_COST_BASE * unit.level
 
   const handleUpgrade = async () => {
     setLoading(true)
@@ -31,9 +34,12 @@ export function UnitCard({ unit, onUpgraded }: Props) {
           <div style={styles.title}>{unit.name} <span style={styles.level}>Lv.{unit.level}</span></div>
           <div style={styles.stats}>💥 {unit.power} атака &nbsp; 🛡 {unit.defense} защита</div>
         </div>
-        <button onClick={handleUpgrade} disabled={loading} style={styles.btn}>
-          {loading ? '...' : '⬆️'}
-        </button>
+        <div style={styles.btnWrap}>
+          <button onClick={handleUpgrade} disabled={loading} style={styles.btn}>
+            {loading ? '...' : '⬆️ Прокачать'}
+          </button>
+          <div style={styles.cost}>{upgradeCost} 💰</div>
+        </div>
       </div>
     </div>
   )
@@ -52,13 +58,17 @@ const styles: Record<string, React.CSSProperties> = {
   title: { fontWeight: 600, fontSize: 15 },
   level: { color: '#FFD700', fontSize: 13 },
   stats: { fontSize: 12, opacity: 0.7, marginTop: 2 },
+  btnWrap: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 },
   btn: {
     background: '#5865F2',
     border: 'none',
     borderRadius: 8,
-    padding: '6px 12px',
+    padding: '6px 10px',
     color: '#fff',
     cursor: 'pointer',
-    fontSize: 16
-  }
+    fontSize: 13,
+    fontWeight: 600,
+    whiteSpace: 'nowrap' as const,
+  },
+  cost: { fontSize: 11, color: '#FFD700', fontWeight: 700 }
 }

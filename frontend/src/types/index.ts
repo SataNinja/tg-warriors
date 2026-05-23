@@ -112,10 +112,12 @@ export interface PetOut {
   rarity: string
   level: number
   power_bonus: number
+  effective_power_bonus: number
   gold_bonus: number
   energy: number
   max_energy: number
   energy_regen_seconds: number
+  energy_next_in: number
   last_battle_at: string | null
   can_battle: boolean
   battle_cooldown_seconds: number

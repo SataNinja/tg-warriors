@@ -127,7 +127,6 @@ export function RaidPanel({ energy, onRaidDone }: Props) {
     <div style={styles.card}>
       <div style={styles.header}>
         <div style={styles.title}>⚔️ Бой</div>
-        <button onClick={() => setScreen('journal')} style={styles.journalBtn}>📋 Журнал</button>
       </div>
 
       <div style={styles.modeTabs}>
@@ -162,6 +161,11 @@ export function RaidPanel({ energy, onRaidDone }: Props) {
           </button>
         </>
       )}
+
+      {/* Кнопка журнала — всегда видна */}
+      <button onClick={() => setScreen('journal')} style={styles.journalBtn}>
+        📋 История боёв и месть
+      </button>
     </div>
   )
 }
@@ -171,8 +175,9 @@ const styles: Record<string, React.CSSProperties> = {
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   title: { fontWeight: 700, fontSize: 16 },
   journalBtn: {
-    background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 8,
-    padding: '5px 10px', color: '#fff', cursor: 'pointer', fontSize: 13
+    width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: 10, padding: '10px 0', color: '#fff', cursor: 'pointer', fontSize: 14,
+    marginTop: 10, fontWeight: 600,
   },
   modeTabs: { display: 'flex', gap: 6, marginBottom: 12 },
   modeTab: {

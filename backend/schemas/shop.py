@@ -58,11 +58,13 @@ class PetOut(BaseModel):
     pet_type: str
     rarity: str
     level: int
-    power_bonus: int
+    power_bonus: int       # базовый бонус (при 100% энергии)
+    effective_power_bonus: int  # реальный бонус (масштабируется по энергии)
     gold_bonus: int
     energy: int
     max_energy: int
     energy_regen_seconds: int
+    energy_next_in: int    # секунд до следующего +1 энергии (0 = полная энергия)
     last_battle_at: Optional[str]
     can_battle: bool
     battle_cooldown_seconds: int

@@ -4,6 +4,21 @@ import { LeaderboardEntry } from '../types'
 
 const MEDALS = ['🥇', '🥈', '🥉']
 
+function CopyIdButton({ userId }: { userId: number }) {
+  const [copied, setCopied] = useState(false)
+  const handleCopy = () => {
+    navigator.clipboard.writeText(String(userId)).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+  return (
+    <button onClick={handleCopy} style={styles.idBtn} title="Скопировать ID для атаки">
+      {copied ? '✅' : `ID: ${userId}`}
+    </button>
+  )
+}
+
 export function Leaderboard() {
   const [board, setBoard] = useState<LeaderboardEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -21,6 +36,7 @@ export function Leaderboard() {
   return (
     <div style={styles.wrap}>
       <div style={styles.title}>🏆 Таблица лидеров</div>
+      <div style={styles.hint}>Нажми на ID чтобы скопировать и атаковать игрока в разделе ⚔️ Бой</div>
       {board.map((entry) => {
         const displayName = entry.nickname || entry.first_name
         const medal = MEDALS[entry.rank - 1] ?? null
@@ -39,9 +55,12 @@ export function Leaderboard() {
               {entry.nickname && entry.username && (
                 <span style={styles.uname}>@{entry.username}</span>
               )}
+              <CopyIdButton userId={entry.user_id} />
             </div>
-            <span style={styles.power}>⚔️ {entry.total_power}</span>
-            <span style={styles.coins}>💰 {entry.coins.toLocaleString()}</span>
+            <div style={styles.statsBlock}>
+              <span style={styles.power}>⚔️ {entry.total_power}</span>
+              <span style={styles.coins}>💰 {entry.coins.toLocaleString()}</span>
+            </div>
           </div>
         )
       })}
@@ -51,7 +70,8 @@ export function Leaderboard() {
 
 const styles: Record<string, React.CSSProperties> = {
   wrap: { marginBottom: 12 },
-  title: { fontWeight: 700, fontSize: 16, marginBottom: 10 },
+  title: { fontWeight: 700, fontSize: 16, marginBottom: 6 },
+  hint: { fontSize: 11, opacity: 0.45, marginBottom: 10 },
   loading: { opacity: 0.6, fontSize: 13, marginBottom: 12, textAlign: 'center' },
   row: {
     display: 'flex',
@@ -63,9 +83,21 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13
   },
   rank: { width: 32, fontWeight: 800, fontSize: 15, textAlign: 'center' },
-  nameBlock: { flex: 1, display: 'flex', flexDirection: 'column', gap: 1 },
+  nameBlock: { flex: 1, display: 'flex', flexDirection: 'column', gap: 2 },
+  statsBlock: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 },
   name: { fontWeight: 600 },
   uname: { opacity: 0.4, fontSize: 10 },
   power: { color: '#a78bfa', fontWeight: 600, fontSize: 12 },
-  coins: { color: '#FFD700', fontWeight: 700 }
+  coins: { color: '#FFD700', fontWeight: 700 },
+  idBtn: {
+    background: 'rgba(88,101,242,0.25)',
+    border: '1px solid rgba(88,101,242,0.4)',
+    borderRadius: 5,
+    padding: '2px 6px',
+    color: '#a5b4fc',
+    cursor: 'pointer',
+    fontSize: 10,
+    fontWeight: 600,
+    width: 'fit-content',
+  }
 }

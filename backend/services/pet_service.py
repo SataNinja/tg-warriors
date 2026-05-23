@@ -29,6 +29,24 @@ def get_pet_current_energy(pet: Pet) -> int:
     return min(PET_MAX_ENERGY, pet.energy + regenerated)
 
 
+def get_pet_energy_next_in(pet: Pet) -> int:
+    """Секунд до следующего +1 энергии. 0 — если энергия полная."""
+    energy = get_pet_current_energy(pet)
+    if energy >= PET_MAX_ENERGY:
+        return 0
+    if pet.energy_updated_at is None:
+        return PET_ENERGY_REGEN_SECONDS
+    elapsed = (now_utc() - pet.energy_updated_at).total_seconds()
+    return max(0, int(PET_ENERGY_REGEN_SECONDS - (elapsed % PET_ENERGY_REGEN_SECONDS)))
+
+
+def get_pet_effective_power(pet: Pet) -> int:
+    """Эффективный power_bonus с учётом текущей энергии (линейное масштабирование)."""
+    energy = get_pet_current_energy(pet)
+    ratio = energy / PET_MAX_ENERGY
+    return int(pet.power_bonus * ratio)
+
+
 def get_pet_cooldown_seconds(pet: Pet) -> int:
     """Секунд до конца кулдауна боя."""
     if not pet.last_battle_at:
@@ -42,6 +60,7 @@ def pet_to_out(pet: Pet) -> PetOut:
     energy = get_pet_current_energy(pet)
     cooldown = get_pet_cooldown_seconds(pet)
     can_battle = energy >= PET_ENERGY_PER_BATTLE and cooldown == 0
+    effective_power = get_pet_effective_power(pet)
     return PetOut(
         id=pet.id,
         name=pet.name,
@@ -49,10 +68,12 @@ def pet_to_out(pet: Pet) -> PetOut:
         rarity=pet.rarity,
         level=pet.level,
         power_bonus=pet.power_bonus,
+        effective_power_bonus=effective_power,
         gold_bonus=pet.gold_bonus,
         energy=energy,
         max_energy=PET_MAX_ENERGY,
         energy_regen_seconds=PET_ENERGY_REGEN_SECONDS,
+        energy_next_in=get_pet_energy_next_in(pet),
         last_battle_at=pet.last_battle_at.isoformat() if pet.last_battle_at else None,
         can_battle=can_battle,
         battle_cooldown_seconds=cooldown,

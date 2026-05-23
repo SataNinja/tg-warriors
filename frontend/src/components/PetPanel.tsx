@@ -37,10 +37,13 @@ function fmt(secs: number) {
 
 function PetCard({ pet, onBattle }: { pet: PetOut; onBattle: (id: number) => void }) {
   const cooldown = useCountdown(pet.battle_cooldown_seconds)
+  const regenIn = useCountdown(pet.energy >= pet.max_energy ? 0 : pet.energy_next_in)
   const energyPct = (pet.energy / pet.max_energy) * 100
   const energyColor = energyPct > 50 ? '#4ade80' : energyPct > 25 ? '#fbbf24' : '#f87171'
   const rarityColor = RARITY_COLORS[pet.rarity]
   const emoji = PET_EMOJIS[pet.pet_type] ?? '🐾'
+  const effPower = pet.effective_power_bonus
+  const effPct = pet.power_bonus > 0 ? Math.round((effPower / pet.power_bonus) * 100) : 100
 
   return (
     <div style={{ ...styles.petCard, borderColor: rarityColor }}>
@@ -49,7 +52,10 @@ function PetCard({ pet, onBattle }: { pet: PetOut; onBattle: (id: number) => voi
         <div style={{ flex: 1 }}>
           <div style={{ ...styles.petName, color: rarityColor }}>{pet.name}</div>
           <div style={styles.petStats}>
-            ⚔️ +{pet.power_bonus} сила
+            ⚔️ +{effPower} сила
+            {pet.power_bonus !== effPower && (
+              <span style={{ opacity: 0.5 }}> (макс +{pet.power_bonus}, {effPct}%)</span>
+            )}
             {pet.gold_bonus > 0 && <span> · 💰 +{pet.gold_bonus}% монет</span>}
           </div>
         </div>
@@ -61,6 +67,9 @@ function PetCard({ pet, onBattle }: { pet: PetOut; onBattle: (id: number) => voi
         <div style={styles.energyTrack}>
           <div style={{ ...styles.energyFill, width: `${energyPct}%`, background: energyColor }} />
         </div>
+        {pet.energy < pet.max_energy && regenIn > 0 && (
+          <span style={{ fontSize: 11, opacity: 0.55, whiteSpace: 'nowrap' }}>+1 через {fmt(regenIn)}</span>
+        )}
       </div>
 
       {/* Кнопка боя */}

@@ -52,10 +52,30 @@ async def _spend_energy(db: AsyncSession, user: User, amount: int = ENERGY_PER_R
 
 
 # ── Вспомогательные ───────────────────────────────────────────────────────────
+_PET_MAX_ENERGY = 20
+_PET_ENERGY_REGEN_SECONDS = 600
+
+
+def _get_pet_current_energy(pet) -> int:
+    """Рассчитывает текущую энергию питомца (без импорта pet_service)."""
+    if pet.energy_updated_at is None:
+        return pet.energy
+    elapsed = (now_utc() - pet.energy_updated_at).total_seconds()
+    regenerated = int(elapsed // _PET_ENERGY_REGEN_SECONDS)
+    return min(_PET_MAX_ENERGY, pet.energy + regenerated)
+
+
 def _total_power(units: list[Unit], weapon=None, pets=None) -> int:
     base = sum(u.power for u in units)
     weapon_bonus = weapon.attack_bonus if weapon else 0
-    pet_bonus = sum(p.power_bonus for p in pets) if pets else 0
+    # Бонус питомца масштабируется по текущей энергии (50% энергия = 50% бонус)
+    if pets:
+        pet_bonus = sum(
+            int(p.power_bonus * _get_pet_current_energy(p) / _PET_MAX_ENERGY)
+            for p in pets
+        )
+    else:
+        pet_bonus = 0
     return base + weapon_bonus + pet_bonus
 
 
@@ -235,6 +255,10 @@ async def do_pve_raid(db: AsyncSession, attacker: User) -> PveRaidResult:
                            description="Поражение в PvE бою"))
 
     attacker.last_raid_at = now_utc()
+    # Логируем PvE бой в журнал (defender_id = attacker_id = признак PvE)
+    db.add(Raid(attacker_id=attacker.id, defender_id=attacker.id,
+                attacker_power=attacker_power, defender_power=bot_power,
+                success=success, coins_stolen=coins_earned if success else 0))
     await db.commit()
     await db.refresh(attacker)
 
@@ -269,23 +293,34 @@ async def get_battle_journal(db: AsyncSession, user: User, limit: int = 30) -> l
 
     entries = []
     for r in raids:
-        is_attack = r.attacker_id == user.id
-        opp_id = r.defender_id if is_attack else r.attacker_id
-        opp = opponents.get(opp_id)
-        opp_name = _display_name(opp) if opp else f"#{opp_id}"
+        # PvE определяется по совпадению attacker и defender
+        is_pve = (r.attacker_id == r.defender_id)
 
-        # Сколько монет изменилось у меня
-        if is_attack:
+        if is_pve:
+            is_attack = True
+            opp_id = 0
+            opp_name = "🤖 Бот"
             coins_delta = r.coins_stolen if r.success else 0
             my_power = r.attacker_power
             opp_power = r.defender_power
+            can_revenge = False
         else:
-            coins_delta = -r.coins_stolen if r.success else 0
-            my_power = r.defender_power
-            opp_power = r.attacker_power
+            is_attack = r.attacker_id == user.id
+            opp_id = r.defender_id if is_attack else r.attacker_id
+            opp = opponents.get(opp_id)
+            opp_name = _display_name(opp) if opp else f"#{opp_id}"
 
-        # Кнопка мести: меня атаковали и победили
-        can_revenge = (not is_attack) and r.success
+            if is_attack:
+                coins_delta = r.coins_stolen if r.success else 0
+                my_power = r.attacker_power
+                opp_power = r.defender_power
+            else:
+                coins_delta = -r.coins_stolen if r.success else 0
+                my_power = r.defender_power
+                opp_power = r.attacker_power
+
+            # Месть: меня атаковали и победили
+            can_revenge = (not is_attack) and r.success
 
         entries.append(BattleEntry(
             id=str(r.id),
