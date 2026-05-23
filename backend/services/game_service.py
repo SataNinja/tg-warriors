@@ -4,7 +4,7 @@ from typing import Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func
 
 from core.config import settings
 from models.user import User
@@ -320,7 +320,8 @@ async def do_raid(db: AsyncSession, attacker: User, target_id: int) -> RaidResul
     return RaidResult(
         success=success, coins_stolen=coins_stolen,
         attacker_power=attacker_power, defender_power=defender_power,
-        message=msg, energy_left=get_current_energy(attacker)
+        message=msg, energy_left=get_current_energy(attacker),
+        opponent_name=_display_name(defender),
     )
 
 
@@ -398,6 +399,41 @@ async def do_pve_raid(db: AsyncSession, attacker: User) -> PveRaidResult:
         message=f"Победа! +{coins_earned} монет{streak_msg}" if success else f"Поражение. -{coins_lost} монет",
         energy_left=get_current_energy(attacker)
     )
+
+
+# ── Случайный матчмейкинг ────────────────────────────────────────────────────
+async def do_random_raid(db: AsyncSession, attacker: User) -> RaidResult:
+    """Находит случайного соперника с похожей силой (±30%) и уровнем замка (±3)."""
+    attacker_power = _total_power(attacker.units, attacker.weapon, attacker.pets)
+    if attacker_power == 0:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нужен хотя бы один юнит")
+
+    min_castle = max(1, attacker.castle_level - 3)
+    max_castle = attacker.castle_level + 3
+
+    # Выбираем кандидатов: тот же диапазон замка, не в щите, не сам себя
+    q = await db.execute(
+        select(User).where(
+            User.id != attacker.id,
+            or_(User.shield_until.is_(None), User.shield_until <= now_utc()),
+            User.castle_level >= min_castle,
+            User.castle_level <= max_castle,
+        ).order_by(func.random()).limit(30)
+    )
+    candidates = q.scalars().all()
+
+    # Фильтруем по силе (±30%)
+    min_power = int(attacker_power * 0.70)
+    max_power = int(attacker_power * 1.30)
+    valid = [u for u in candidates if min_power <= _total_power(u.units) <= max_power]
+
+    # Если точного совпадения нет — берём любого из диапазона замка
+    target = random.choice(valid) if valid else (random.choice(candidates) if candidates else None)
+    if target is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND,
+                            "Соперников не найдено. Попробуй позже или атакуй вручную!")
+
+    return await do_raid(db, attacker, target.id)
 
 
 # ── Журнал боёв ───────────────────────────────────────────────────────────────
@@ -532,6 +568,34 @@ async def claim_daily_reward(db: AsyncSession, user: User) -> DailyRewardResult:
         streak=streak,
         crystals_bonus=crystals_bonus,
     )
+
+
+# ── Кристаллы ─────────────────────────────────────────────────────────────────
+CRYSTAL_COIN_COST = 500  # монет за 1 кристалл
+
+async def buy_crystals(db: AsyncSession, user: User, amount: int = 1) -> dict:
+    """Покупка кристаллов за монеты. 500 монет = 1 кристалл."""
+    if amount < 1 or amount > 10:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Количество: от 1 до 10")
+    total_cost = CRYSTAL_COIN_COST * amount
+    if user.coins < total_cost:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Нужно {total_cost} монет. У тебя {user.coins}."
+        )
+    user.coins -= total_cost
+    user.crystals = getattr(user, 'crystals', 0) + amount
+    db.add(Transaction(user_id=user.id, amount=-total_cost, type="buy_crystals",
+                       description=f"Покупка {amount} кристаллов"))
+    await db.commit()
+    await db.refresh(user)
+    return {
+        "crystals_bought": amount,
+        "coins_spent": total_cost,
+        "new_crystals": user.crystals,
+        "new_coins": user.coins,
+        "message": f"💎 Куплено {amount} кристалл(ов)! Потрачено {total_cost} монет."
+    }
 
 
 # ── Рефералы ──────────────────────────────────────────────────────────────────

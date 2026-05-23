@@ -7,6 +7,7 @@ from routers.deps import get_current_user
 from schemas.shop import (
     PetOut, PetBattleRequest, PetBattleResult,
     EggOut, HatchEggResult, FeedPetRequest, FeedPetResult, ReleasePetResult,
+    PetUpgradeResult,
 )
 from services import pet_service
 
@@ -48,6 +49,16 @@ async def feed_pet(
     db: AsyncSession = Depends(get_db),
 ):
     return await pet_service.feed_pet(db, current_user, pet_id, body.food_type)
+
+
+@router.post("/{pet_id}/upgrade", response_model=PetOut)
+async def upgrade_pet(
+    pet_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Прокачать питомца за 5 💎 кристаллов. +3 к силе, +1 к золоту, +1 уровень."""
+    return await pet_service.upgrade_pet(db, current_user, pet_id)
 
 
 # ── Яйца ─────────────────────────────────────────────────────────────────────

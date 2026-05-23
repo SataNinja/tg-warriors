@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { PetOut, PetBattleResult, EggOut, FoodItem } from '../types'
-import { fetchPets, doPetBattle, releasePet, feedPet, fetchEggs, hatchEgg, fetchFoodList } from '../api/client'
+import { fetchPets, doPetBattle, releasePet, feedPet, fetchEggs, hatchEgg, fetchFoodList, upgradePet, buyCrystals } from '../api/client'
 
 interface Props {
   onRefresh: () => void
   userCoins: number
+  userCrystals: number
 }
 
 type PanelTab = 'pets' | 'eggs'
@@ -154,14 +155,18 @@ function PetCard({
   onBattle,
   onFeed,
   onRelease,
+  onUpgrade,
   userCoins,
+  userCrystals,
   foodList,
 }: {
   pet: PetOut
   onBattle: (id: number) => void
   onFeed: (id: number, foodType: string) => void
   onRelease: (id: number, name: string) => void
+  onUpgrade: (id: number) => void
   userCoins: number
+  userCrystals: number
   foodList: FoodItem[]
 }) {
   const cooldown = useCountdown(pet.battle_cooldown_seconds)
@@ -249,6 +254,16 @@ function PetCard({
         </button>
       )}
 
+      {/* Прокачка за кристаллы */}
+      <button
+        onClick={() => onUpgrade(pet.id)}
+        disabled={userCrystals < 5}
+        style={{ ...styles.upgradeBtn, opacity: userCrystals < 5 ? 0.4 : 1 }}
+        title={userCrystals < 5 ? `Нужно 5 💎, у тебя ${userCrystals}` : ''}
+      >
+        💎 Прокачать (5 💎) · Lv.{pet.level} → {pet.level + 1}
+      </button>
+
       {/* Кнопка боя */}
       {cooldown > 0 ? (
         <div style={styles.cooldownText}>⏳ Кулдаун: {fmt(cooldown)}</div>
@@ -264,7 +279,7 @@ function PetCard({
 }
 
 // ── Основной компонент ────────────────────────────────────────────────────────
-export function PetPanel({ onRefresh, userCoins }: Props) {
+export function PetPanel({ onRefresh, userCoins, userCrystals }: Props) {
   const [tab, setTab] = useState<PanelTab>('pets')
   const [pets, setPets] = useState<PetOut[]>([])
   const [eggs, setEggs] = useState<EggOut[]>([])
@@ -339,6 +354,27 @@ export function PetPanel({ onRefresh, userCoins }: Props) {
     }
   }
 
+  const handleUpgrade = async (petId: number) => {
+    try {
+      const res = await upgradePet(petId)
+      alert(`⬆️ ${res.name} прокачан до Lv.${res.level}! +3 сила, +1 к золоту.`)
+      reload()
+      onRefresh()
+    } catch (e: any) {
+      alert(e?.response?.data?.detail ?? 'Ошибка прокачки')
+    }
+  }
+
+  const handleBuyCrystals = async (amount: number) => {
+    try {
+      const res = await buyCrystals(amount)
+      alert(res.message)
+      onRefresh()
+    } catch (e: any) {
+      alert(e?.response?.data?.detail ?? 'Ошибка')
+    }
+  }
+
   const handleHatch = async (eggId: number) => {
     try {
       const res = await hatchEgg(eggId)
@@ -376,7 +412,10 @@ export function PetPanel({ onRefresh, userCoins }: Props) {
         </div>
       )}
 
-      <div style={styles.header}>🐾 Питомцы</div>
+      <div style={styles.header}>
+        🐾 Питомцы
+        <span style={styles.crystalBadge}>💎 {userCrystals}</span>
+      </div>
 
       {/* Вкладки */}
       <div style={styles.tabs}>
@@ -405,6 +444,9 @@ export function PetPanel({ onRefresh, userCoins }: Props) {
           <div style={styles.resultStats}>
             <span>🐾 {battleResult.pet_power} VS 🤖 {battleResult.bot_power}</span>
             {battleResult.success && <span>⚡ +{battleResult.energy_gained} энергии!</span>}
+            {(battleResult as any).crystal_earned > 0 && (
+              <span style={{ color: '#a78bfa' }}>💎 +1 кристалл!</span>
+            )}
           </div>
           <button onClick={() => setBattleResult(null)} style={styles.closeBtn}>Закрыть</button>
         </div>
@@ -424,16 +466,36 @@ export function PetPanel({ onRefresh, userCoins }: Props) {
                 key={p.id}
                 pet={p}
                 userCoins={userCoins}
+                userCrystals={userCrystals}
                 foodList={foodList}
                 onBattle={battling ? () => {} : handleBattle}
                 onFeed={handleFeed}
                 onRelease={(id, name) => setReleaseConfirm({ id, name })}
+                onUpgrade={handleUpgrade}
               />
             ))
           )}
           <div style={styles.hint}>
-            Победа в бою питомца = +1–20 ⚡ тебе.<br />
+            Победа в бою питомца = +1–20 ⚡ тебе · 10% шанс 💎 кристалл.<br />
             Голод 0% = питомец не даёт бонус к силе.
+          </div>
+          {/* Покупка кристаллов */}
+          <div style={styles.crystalShop}>
+            <div style={styles.crystalShopTitle}>💎 Кристаллы</div>
+            <div style={styles.crystalShopHint}>500 💰 = 1 💎. Используй для прокачки питомцев.</div>
+            <div style={styles.crystalBuyRow}>
+              {[1, 3, 5].map(n => (
+                <button
+                  key={n}
+                  onClick={() => handleBuyCrystals(n)}
+                  disabled={userCoins < 500 * n}
+                  style={{ ...styles.crystalBuyBtn, opacity: userCoins < 500 * n ? 0.4 : 1 }}
+                >
+                  +{n} 💎<br />
+                  <span style={{ fontSize: 11, opacity: 0.7 }}>{500 * n}💰</span>
+                </button>
+              ))}
+            </div>
           </div>
         </>
       )}
@@ -514,7 +576,27 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 8, padding: '7px 0', color: '#fff', cursor: 'pointer', fontSize: 13,
   },
   hint: { fontSize: 11, opacity: 0.45, textAlign: 'center', lineHeight: 1.5, marginTop: 4 },
-  // Confirm dialog
+  crystalBadge: {
+    float: 'right', background: 'rgba(167,139,250,0.2)', color: '#a78bfa',
+    borderRadius: 8, padding: '2px 8px', fontSize: 13, fontWeight: 700,
+  },
+  upgradeBtn: {
+    width: '100%', background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.3)',
+    borderRadius: 8, padding: '6px 0', color: '#a78bfa', cursor: 'pointer',
+    fontWeight: 600, fontSize: 12, marginBottom: 6,
+  },
+  crystalShop: {
+    background: 'rgba(167,139,250,0.08)', borderRadius: 12,
+    padding: '12px 14px', marginTop: 12, border: '1px solid rgba(167,139,250,0.2)',
+  },
+  crystalShopTitle: { fontWeight: 700, fontSize: 14, marginBottom: 4, color: '#a78bfa' },
+  crystalShopHint: { fontSize: 11, opacity: 0.6, marginBottom: 10 },
+  crystalBuyRow: { display: 'flex', gap: 8 },
+  crystalBuyBtn: {
+    flex: 1, background: 'rgba(167,139,250,0.2)', border: '1px solid rgba(167,139,250,0.3)',
+    borderRadius: 10, padding: '8px 0', color: '#fff', cursor: 'pointer',
+    fontWeight: 700, fontSize: 14, textAlign: 'center' as const, lineHeight: 1.6,
+  },
   confirmOverlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
     display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,

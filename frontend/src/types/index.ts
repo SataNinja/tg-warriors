@@ -50,6 +50,7 @@ export interface RaidResult {
   defender_power: number
   message: string
   energy_left: number
+  opponent_name: string
 }
 
 export interface PveRaidResult {

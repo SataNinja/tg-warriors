@@ -13,6 +13,7 @@ class RaidResult(BaseModel):
     defender_power: int
     message: str
     energy_left: int
+    opponent_name: str = ""   # имя противника (заполняется в PvP / random)
 
 
 class PveRaidResult(BaseModel):

@@ -10,6 +10,8 @@ interface Props {
   /** Если бой восстанавливается после смены вкладки — передаём время старта и длину */
   startedAt?: number
   forcedDuration?: number
+  /** Эмодзи юнитов атакующего (из реальной армии игрока) */
+  attackerEmojis?: string[]
 }
 
 const CASTLE_EMOJIS: Record<number, string> = {
@@ -62,6 +64,7 @@ export function BattleAnimation({
   onComplete,
   startedAt,
   forcedDuration,
+  attackerEmojis,
 }: Props) {
   // Если восстанавливаем бой — считаем начальный прогресс
   const dur = useRef(forcedDuration ?? calcDuration(attackerPower, defenderPower))
@@ -78,6 +81,8 @@ export function BattleAnimation({
   const atkCastle = CASTLE_EMOJIS[attackerCastleLevel] ?? '🏘'
   const defCastle = isPve ? '🤖' : (CASTLE_EMOJIS[defenderCastleLevel] ?? '🏘')
   const defPool = isPve ? BOT_UNITS : DEFENDER_UNITS
+  // Если переданы реальные эмодзи армии — используем их, иначе дефолтный пул
+  const atkPool = (attackerEmojis && attackerEmojis.length > 0) ? attackerEmojis : ATTACKER_UNITS
 
   // Прогресс-бар (учитывает восстановление — стартует от реального времени)
   useEffect(() => {
@@ -95,7 +100,7 @@ export function BattleAnimation({
   useEffect(() => {
     const id = setInterval(() => {
       const isAtk = Math.random() > 0.45
-      const pool = isAtk ? ATTACKER_UNITS : defPool
+      const pool = isAtk ? atkPool : defPool
       setSoldiers(prev => [
         ...prev.slice(-14),
         {

@@ -8,8 +8,10 @@ from schemas.shop import (
     CastleInfo, CastleUpgradeResult,
     WeaponInfo, WeaponBuyResult, WeaponUpgradeResult,
     BuyEggRequest, BuyEggResult, FoodItem,
+    BuyCrystalsRequest, BuyCrystalsResult,
 )
 from services import shop_service
+from services.game_service import buy_crystals
 
 router = APIRouter(prefix="/shop", tags=["shop"])
 
@@ -58,6 +60,17 @@ async def buy_egg(
     db: AsyncSession = Depends(get_db),
 ):
     return await shop_service.buy_egg(db, current_user, body.egg_type)
+
+
+# ── Кристаллы ─────────────────────────────────────────────────────────────────
+@router.post("/crystals/buy", response_model=BuyCrystalsResult)
+async def crystals_buy(
+    body: BuyCrystalsRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Купить кристаллы за монеты. 500 монет = 1 кристалл."""
+    return await buy_crystals(db, current_user, body.amount)
 
 
 # ── Еда для питомцев ─────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { GameState } from '../types'
 import { Profile } from '../components/Profile'
 import { DailyReward } from '../components/DailyReward'
-import { UnitCard } from '../components/UnitCard'
+import { UnitCard, UNIT_EMOJIS } from '../components/UnitCard'
 import { UnitShop } from '../components/UnitShop'
 import { RaidPanel } from '../components/RaidPanel'
 import { Leaderboard } from '../components/Leaderboard'
@@ -28,6 +28,9 @@ export function HomePage({ gameState, onRefresh }: Props) {
 
   const botUsername = import.meta.env.VITE_BOT_USERNAME ?? 'YOUR_BOT'
   const refLink = `https://t.me/${botUsername}?start=ref_${user.id}`
+
+  // Уникальные эмодзи юнитов игрока (дедупликация по типу)
+  const attackerEmojis = [...new Set(user.units.map(u => UNIT_EMOJIS[u.unit_type] ?? '⚔️'))]
 
   const handleBuyShield = async () => {
     setShieldLoading(true)
@@ -156,6 +159,7 @@ export function HomePage({ gameState, onRefresh }: Props) {
           <RaidPanel
             energy={energy}
             onRaidDone={onRefresh}
+            attackerEmojis={attackerEmojis}
           />
         )}
 
@@ -170,7 +174,7 @@ export function HomePage({ gameState, onRefresh }: Props) {
 
         {/* ── Питомцы ── */}
         {tab === 'pets' && (
-          <PetPanel onRefresh={onRefresh} userCoins={user.coins} />
+          <PetPanel onRefresh={onRefresh} userCoins={user.coins} userCrystals={user.crystals ?? 0} />
         )}
 
         {/* ── Лидерборд ── */}

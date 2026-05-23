@@ -128,6 +128,27 @@ class PetBattleResult(BaseModel):
     pet_energy_left: int
     player_energy_left: int
     message: str
+    crystal_earned: int = 0     # 1 если выпал кристалл (10% шанс)
+
+
+class PetUpgradeResult(BaseModel):
+    pet_name: str
+    new_level: int
+    new_power_bonus: int
+    crystals_spent: int
+    new_crystals: int
+    message: str
+
+
+class BuyCrystalsRequest(BaseModel):
+    amount: int = 1
+
+class BuyCrystalsResult(BaseModel):
+    crystals_bought: int
+    coins_spent: int
+    new_crystals: int
+    new_coins: int
+    message: str
 
 
 # ── Еда для питомцев ──────────────────────────────────────────────────────────

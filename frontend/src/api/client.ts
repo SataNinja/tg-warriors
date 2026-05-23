@@ -69,6 +69,11 @@ export async function doPveRaid() {
   return data
 }
 
+export async function doRandomRaid() {
+  const { data } = await api.post('/raid/random')
+  return data
+}
+
 export async function buyShield() {
   const { data } = await api.post('/shield')
   return data
@@ -143,6 +148,16 @@ export async function doPetBattle(petId: number) {
 
 export async function releasePet(petId: number) {
   const { data } = await api.post(`/pets/${petId}/release`)
+  return data
+}
+
+export async function upgradePet(petId: number) {
+  const { data } = await api.post(`/pets/${petId}/upgrade`)
+  return data
+}
+
+export async function buyCrystals(amount: number = 1) {
+  const { data } = await api.post('/shop/crystals/buy', { amount })
   return data
 }
 

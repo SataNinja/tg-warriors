@@ -5,7 +5,7 @@ from core.database import get_db
 from models.user import User
 from routers.deps import get_current_user
 from schemas.game import RaidRequest, RaidResult, PveRaidResult, BattleEntry
-from services.game_service import do_raid, do_pve_raid, get_battle_journal
+from services.game_service import do_raid, do_pve_raid, do_random_raid, get_battle_journal
 
 router = APIRouter(prefix="/raid", tags=["raid"])
 
@@ -27,6 +27,15 @@ async def raid_pve(
 ):
     """PvE бой с ботом. Без кулдауна."""
     return await do_pve_raid(db, current_user)
+
+
+@router.post("/random", response_model=RaidResult)
+async def raid_random(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Случайный PvP рейд — ищет соперника с похожей силой и уровнем замка."""
+    return await do_random_raid(db, current_user)
 
 
 @router.get("/journal", response_model=list[BattleEntry])

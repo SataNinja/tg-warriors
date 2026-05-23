@@ -286,11 +286,16 @@ async def do_pet_battle(db: AsyncSession, user: User, pet_id: int) -> PetBattleR
     extra_penalty = 0
     n = now_utc()
 
+    crystal_earned = 0
     if success:
         player_energy = get_current_energy(user)
         energy_gained = random.randint(1, 20)
         user.energy = min(MAX_ENERGY, player_energy + energy_gained)
         user.energy_updated_at = n
+        # 10% шанс получить кристалл за победу питомца
+        if random.random() < 0.10:
+            crystal_earned = 1
+            user.crystals = getattr(user, 'crystals', 0) + 1
         db.add(Transaction(user_id=user.id, amount=energy_gained, type="pet_battle",
                            description=f"Победа в бою питомца {pet.name}"))
     else:
@@ -308,7 +313,8 @@ async def do_pet_battle(db: AsyncSession, user: User, pet_id: int) -> PetBattleR
     pet_energy_after = get_pet_current_energy(pet)
 
     if success:
-        msg = f"🏆 {pet.name} победил! Ты получаешь +{energy_gained} ⚡ энергии!"
+        crystal_msg = f" +1 💎 кристалл!" if crystal_earned else ""
+        msg = f"🏆 {pet.name} победил! Ты получаешь +{energy_gained} ⚡ энергии!{crystal_msg}"
     else:
         msg = f"💀 {pet.name} проиграл. Штраф: -{total_spent} энергии питомца."
 
@@ -322,4 +328,33 @@ async def do_pet_battle(db: AsyncSession, user: User, pet_id: int) -> PetBattleR
         pet_energy_left=pet_energy_after,
         player_energy_left=player_energy_after,
         message=msg,
+        crystal_earned=crystal_earned,
     )
+
+
+# ── Прокачка питомца за кристаллы ─────────────────────────────────────────────
+PET_UPGRADE_CRYSTAL_COST = 5
+
+async def upgrade_pet(db: AsyncSession, user: User, pet_id: int) -> PetOut:
+    result = await db.execute(select(Pet).where(Pet.id == pet_id, Pet.owner_id == user.id))
+    pet = result.scalar_one_or_none()
+    if not pet:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Питомец не найден")
+
+    crystals = getattr(user, 'crystals', 0)
+    if crystals < PET_UPGRADE_CRYSTAL_COST:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Нужно {PET_UPGRADE_CRYSTAL_COST} 💎 кристаллов. У тебя {crystals}."
+        )
+
+    user.crystals = crystals - PET_UPGRADE_CRYSTAL_COST
+    pet.level += 1
+    pet.power_bonus += 3
+    pet.gold_bonus = min(pet.gold_bonus + 1, 30)  # gold_bonus растёт, но не больше 30
+
+    db.add(Transaction(user_id=user.id, amount=-PET_UPGRADE_CRYSTAL_COST, type="pet_upgrade",
+                       description=f"Прокачка питомца {pet.name} до уровня {pet.level}"))
+    await db.commit()
+    await db.refresh(pet)
+    return pet_to_out(pet)

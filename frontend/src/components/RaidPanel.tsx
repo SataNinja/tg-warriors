@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { doRaid, doPveRaid } from '../api/client'
+import { doRaid, doPveRaid, doRandomRaid } from '../api/client'
 import { RaidResult, PveRaidResult } from '../types'
 import { BattleAnimation } from './BattleAnimation'
 import { BattleJournal } from './BattleJournal'
@@ -8,10 +8,11 @@ import { useGameStore, OngoingBattle } from '../store/gameStore'
 interface Props {
   energy: number
   onRaidDone: () => void
+  attackerEmojis?: string[]   // эмодзи юнитов игрока для анимации
 }
 
 type Screen = 'menu' | 'animating' | 'result' | 'journal'
-type Mode = 'pve' | 'pvp'
+type Mode = 'pve' | 'random' | 'pvp'
 
 function calcDuration(ap: number, dp: number): number {
   const diff = Math.abs(ap - dp)
@@ -23,7 +24,7 @@ function calcDuration(ap: number, dp: number): number {
   return Math.round(Math.max(30_000, Math.min(60_000, base + bonus + jitter)))
 }
 
-export function RaidPanel({ energy, onRaidDone }: Props) {
+export function RaidPanel({ energy, onRaidDone, attackerEmojis }: Props) {
   const { ongoingBattle, setOngoingBattle } = useGameStore()
 
   const [screen, setScreen] = useState<Screen>('menu')
@@ -70,6 +71,10 @@ export function RaidPanel({ energy, onRaidDone }: Props) {
         res = await doPveRaid()
         const r = res as PveRaidResult
         ap = r.attacker_power; dp = r.bot_power; isPve = true
+      } else if (mode === 'random') {
+        res = await doRandomRaid()
+        const r = res as RaidResult
+        ap = r.attacker_power; dp = r.defender_power; isPve = false
       } else {
         const id = parseInt(targetId)
         if (!id) { alert('Введи корректный ID'); setLoading(false); return }
@@ -140,6 +145,7 @@ export function RaidPanel({ energy, onRaidDone }: Props) {
         onComplete={handleAnimEnd}
         startedAt={battleMeta?.startedAt}
         forcedDuration={battleMeta?.duration}
+        attackerEmojis={attackerEmojis}
       />
     )
   }
@@ -157,7 +163,14 @@ export function RaidPanel({ energy, onRaidDone }: Props) {
           {isPveResult(result) ? (
             <div style={styles.sub}>Твоя сила: {result.attacker_power} / Бот: {result.bot_power}</div>
           ) : (
-            <div style={styles.sub}>Твоя сила: {(result as RaidResult).attacker_power} / Враг: {(result as RaidResult).defender_power}</div>
+            <>
+              {(result as RaidResult).opponent_name && (
+                <div style={{ ...styles.sub, fontWeight: 600, marginBottom: 2 }}>
+                  vs {(result as RaidResult).opponent_name}
+                </div>
+              )}
+              <div style={styles.sub}>Твоя сила: {(result as RaidResult).attacker_power} / Враг: {(result as RaidResult).defender_power}</div>
+            </>
           )}
           <div style={styles.energy}>⚡ Энергия: {result.energy_left}/50</div>
         </div>
@@ -186,10 +199,14 @@ export function RaidPanel({ energy, onRaidDone }: Props) {
       </div>
 
       <div style={styles.modeTabs}>
-        {(['pve', 'pvp'] as Mode[]).map(m => (
-          <button key={m} onClick={() => setMode(m)}
-            style={{ ...styles.modeTab, ...(mode === m ? styles.modeActive : {}) }}>
-            {m === 'pve' ? '🤖 Бой с ботом' : '👤 PvP по ID'}
+        {([
+          { key: 'pve',    label: '🤖 Бот' },
+          { key: 'random', label: '🎲 Случайный' },
+          { key: 'pvp',    label: '👤 По ID' },
+        ] as { key: Mode; label: string }[]).map(m => (
+          <button key={m.key} onClick={() => setMode(m.key)}
+            style={{ ...styles.modeTab, ...(mode === m.key ? styles.modeActive : {}) }}>
+            {m.label}
           </button>
         ))}
       </div>
@@ -212,8 +229,17 @@ export function RaidPanel({ energy, onRaidDone }: Props) {
           {mode === 'pve' && (
             <div style={styles.hint}>Стоит 5 ⚡. Противник ±30% от твоей силы. Анимация 30-60 сек.</div>
           )}
+          {mode === 'random' && (
+            <div style={styles.hint}>
+              🎲 Стоит 5 ⚡. Матчмейкинг: ищем соперника с похожей силой (±30%) и уровнем замка (±3).
+            </div>
+          )}
           <button onClick={handleFight} disabled={loading} style={styles.fightBtn}>
-            {loading ? 'Запускаю...' : mode === 'pve' ? '⚔️ В бой!' : '🗡 Атаковать'}
+            {loading
+              ? (mode === 'random' ? '🔍 Ищем соперника...' : 'Запускаю...')
+              : mode === 'pve' ? '⚔️ В бой!'
+              : mode === 'random' ? '🎲 Найти и атаковать!'
+              : '🗡 Атаковать'}
           </button>
         </>
       )}
@@ -237,7 +263,7 @@ const styles: Record<string, React.CSSProperties> = {
   modeTabs: { display: 'flex', gap: 6, marginBottom: 12 },
   modeTab: {
     flex: 1, background: 'rgba(255,255,255,0.07)', border: 'none',
-    borderRadius: 10, padding: '8px 0', color: '#fff', cursor: 'pointer', fontSize: 13
+    borderRadius: 10, padding: '8px 0', color: '#fff', cursor: 'pointer', fontSize: 12,
   },
   modeActive: { background: '#5865F2' },
   warn: { color: '#fbbf24', fontSize: 13, marginBottom: 8 },
@@ -252,7 +278,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%', background: '#dc2626', border: 'none', borderRadius: 12,
     padding: 13, color: '#fff', cursor: 'pointer', fontWeight: 800, fontSize: 15
   },
-  resultBox: { borderRadius: 14, padding: '20px 16px', textAlign: 'center', marginBottom: 12 },
+  resultBox: { borderRadius: 14, padding: '20px 16px', textAlign: 'center' as const, marginBottom: 12 },
   resultIcon: { fontSize: 48, marginBottom: 8 },
   resultMsg: { fontSize: 18, fontWeight: 800, marginBottom: 6 },
   sub: { fontSize: 13, opacity: 0.7, marginBottom: 4 },
