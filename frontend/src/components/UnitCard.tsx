@@ -99,7 +99,7 @@ export function UnitCard({ units, onUpgraded }: StackProps) {
       {expanded && (
         <div style={styles.list}>
           <div style={styles.listHint}>Нажми ⬆️ чтобы прокачать отдельного юнита:</div>
-          {units.map((u, i) => (
+          {units.map(u => (
             <SingleUnitCard key={u.id} unit={u} onUpgraded={onUpgraded} />
           ))}
         </div>
