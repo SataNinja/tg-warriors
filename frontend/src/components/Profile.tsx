@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { User } from '../types'
 import { setNickname } from '../api/client'
 
@@ -7,14 +7,36 @@ interface Props {
   shieldActive: boolean
   energy: number
   maxEnergy: number
-  energyRegenMinutes: number
+  energyRegenSeconds: number
   onRefresh: () => void
 }
 
-export function Profile({ user, shieldActive, energy, maxEnergy, energyRegenMinutes, onRefresh }: Props) {
+function useCountdown(seconds: number) {
+  const [left, setLeft] = useState(seconds)
+  useEffect(() => {
+    setLeft(seconds)
+    if (seconds <= 0) return
+    const id = setInterval(() => setLeft(prev => (prev <= 1 ? 0 : prev - 1)), 1000)
+    return () => clearInterval(id)
+  }, [seconds])
+  return left
+}
+
+function fmtSecs(secs: number) {
+  const m = Math.floor(secs / 60), s = secs % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+const CASTLE_EMOJIS: Record<number, string> = {
+  1: '🏘', 2: '🏰', 3: '🏯', 4: '🗼', 5: '⚔️',
+  6: '🐉', 7: '🛡', 8: '👑', 9: '🌟', 10: '💎',
+}
+
+export function Profile({ user, shieldActive, energy, maxEnergy, energyRegenSeconds, onRefresh }: Props) {
   const [editing, setEditing] = useState(false)
   const [newNick, setNewNick] = useState(user.nickname ?? '')
   const [loading, setLoading] = useState(false)
+  const regenLeft = useCountdown(energyRegenSeconds)
 
   const displayName = user.nickname || user.first_name
   const energyPct = (energy / maxEnergy) * 100
@@ -45,7 +67,7 @@ export function Profile({ user, shieldActive, energy, maxEnergy, energyRegenMinu
                 onChange={e => setNewNick(e.target.value)}
                 maxLength={20}
                 style={styles.input}
-                placeholder="Новый никнейм (3-20 симв.)"
+                placeholder="Никнейм (3-20 симв.)"
               />
               <button onClick={handleSaveNick} disabled={loading} style={styles.saveBtn}>
                 {loading ? '...' : '✓'}
@@ -60,16 +82,33 @@ export function Profile({ user, shieldActive, energy, maxEnergy, energyRegenMinu
           )}
           <div style={styles.userId}>ID: {user.id}</div>
         </div>
-        <div style={styles.coins}>💰 {user.coins.toLocaleString()}</div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={styles.coins}>💰 {user.coins.toLocaleString()}</div>
+          {user.iron > 0 && <div style={styles.iron}>🔩 {user.iron}</div>}
+        </div>
       </div>
 
-      {/* Энергия */}
+      {/* Замок + серия побед */}
+      <div style={styles.statsRow}>
+        <span style={styles.stat}>
+          {CASTLE_EMOJIS[user.castle_level] ?? '🏰'} Замок {user.castle_level}
+        </span>
+        {user.win_streak >= 3 && (
+          <span style={{ ...styles.stat, color: '#f59e0b' }}>
+            🔥 Серия: {user.win_streak}
+          </span>
+        )}
+        <span style={styles.stat}>⚔️ Юнитов: {user.units.length}</span>
+      </div>
+
+      {/* Энергия с таймером */}
       <div style={styles.energySection}>
         <div style={styles.energyLabel}>
           ⚡ Энергия: {energy}/{maxEnergy}
-          {energy < maxEnergy && (
-            <span style={styles.regenHint}> (+1 через {energyRegenMinutes} мин)</span>
+          {energy < maxEnergy && regenLeft > 0 && (
+            <span style={styles.regenHint}> (+1 через {fmtSecs(regenLeft)})</span>
           )}
+          {energy >= maxEnergy && <span style={{ color: '#4ade80', fontSize: 11 }}> Полная!</span>}
         </div>
         <div style={styles.energyTrack}>
           <div style={{ ...styles.energyFill, width: `${energyPct}%`, background: energyColor }} />
@@ -79,9 +118,8 @@ export function Profile({ user, shieldActive, energy, maxEnergy, energyRegenMinu
       {/* Щит */}
       <div style={styles.shield}>
         {shieldActive && user.shield_until
-          ? `🛡 Щит активен до ${new Date(user.shield_until).toLocaleTimeString()}`
+          ? `🛡 Щит активен до ${new Date(user.shield_until).toLocaleTimeString('ru')}`
           : '🔓 Без защиты'}
-        &nbsp;·&nbsp; ⚔️ Юнитов: {user.units.length}
       </div>
     </div>
   )
@@ -94,12 +132,13 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '14px 16px',
     marginBottom: 12
   },
-  row: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
+  row: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
   nameRow: { display: 'flex', alignItems: 'center', gap: 6 },
   name: { fontSize: 17, fontWeight: 700 },
   editBtn: { background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '0 2px' },
   userId: { fontSize: 11, opacity: 0.4, marginTop: 2 },
-  coins: { fontSize: 20, fontWeight: 800, color: '#FFD700' },
+  coins: { fontSize: 18, fontWeight: 800, color: '#FFD700' },
+  iron: { fontSize: 13, color: '#9ca3af', marginTop: 2 },
   editRow: { display: 'flex', gap: 4, alignItems: 'center' },
   input: {
     background: 'rgba(255,255,255,0.1)',
@@ -108,14 +147,16 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '4px 8px',
     color: '#fff',
     fontSize: 13,
-    width: 160
+    width: 150
   },
   saveBtn: { background: '#059669', border: 'none', borderRadius: 6, padding: '4px 8px', color: '#fff', cursor: 'pointer' },
   cancelBtn: { background: '#374151', border: 'none', borderRadius: 6, padding: '4px 8px', color: '#fff', cursor: 'pointer' },
-  energySection: { marginBottom: 8 },
+  statsRow: { display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 8 },
+  stat: { fontSize: 12, background: 'rgba(255,255,255,0.08)', borderRadius: 6, padding: '3px 8px' },
+  energySection: { marginBottom: 6 },
   energyLabel: { fontSize: 12, marginBottom: 4 },
   regenHint: { opacity: 0.5, fontSize: 11 },
   energyTrack: { height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden' },
   energyFill: { height: '100%', borderRadius: 4, transition: 'width 0.3s' },
-  shield: { fontSize: 12, opacity: 0.65 }
+  shield: { fontSize: 12, opacity: 0.65, marginTop: 4 },
 }

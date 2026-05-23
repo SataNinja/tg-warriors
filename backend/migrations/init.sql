@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS users (
 ALTER TABLE users ADD COLUMN IF NOT EXISTS nickname VARCHAR(32);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS energy INTEGER NOT NULL DEFAULT 50;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS energy_updated_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS castle_level INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS win_streak INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS iron INTEGER NOT NULL DEFAULT 0;
 
 -- ── Юниты ───────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS units (
@@ -90,6 +93,34 @@ CREATE TABLE IF NOT EXISTS transactions (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- ── Оружие ──────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS weapons (
+    id          SERIAL      PRIMARY KEY,
+    owner_id    BIGINT      NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    name        VARCHAR(64) NOT NULL DEFAULT 'Железный меч',
+    rarity      VARCHAR(16) NOT NULL DEFAULT 'common',
+    level       INTEGER     NOT NULL DEFAULT 1,
+    attack_bonus INTEGER    NOT NULL DEFAULT 5,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ── Питомцы ──────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS pets (
+    id                  SERIAL      PRIMARY KEY,
+    owner_id            BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name                VARCHAR(64) NOT NULL,
+    pet_type            VARCHAR(16) NOT NULL,
+    rarity              VARCHAR(16) NOT NULL DEFAULT 'common',
+    level               INTEGER     NOT NULL DEFAULT 1,
+    power_bonus         INTEGER     NOT NULL DEFAULT 0,
+    gold_bonus          INTEGER     NOT NULL DEFAULT 0,
+    energy              INTEGER     NOT NULL DEFAULT 20,
+    energy_updated_at   TIMESTAMPTZ,
+    last_battle_at      TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ── Индексы ─────────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_units_owner       ON units(owner_id);
 CREATE INDEX IF NOT EXISTS idx_raids_attacker    ON raids(attacker_id);
@@ -97,3 +128,4 @@ CREATE INDEX IF NOT EXISTS idx_raids_defender    ON raids(defender_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_sent);
 CREATE INDEX IF NOT EXISTS idx_transactions_user  ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
+CREATE INDEX IF NOT EXISTS idx_pets_owner        ON pets(owner_id);

@@ -5,9 +5,11 @@ import { DailyReward } from '../components/DailyReward'
 import { UnitCard } from '../components/UnitCard'
 import { RaidPanel } from '../components/RaidPanel'
 import { Leaderboard } from '../components/Leaderboard'
+import { Shop } from '../components/Shop'
+import { PetPanel } from '../components/PetPanel'
 import { buyUnit, buyShield } from '../api/client'
 
-type Tab = 'main' | 'units' | 'raid' | 'leaderboard'
+type Tab = 'main' | 'units' | 'raid' | 'shop' | 'pets' | 'leaderboard'
 
 interface Props {
   gameState: GameState
@@ -19,11 +21,16 @@ export function HomePage({ gameState, onRefresh }: Props) {
   const [buyLoading, setBuyLoading] = useState(false)
   const [shieldLoading, setShieldLoading] = useState(false)
 
-  const { user, can_claim_daily, daily_reward_coins, raid_cooldown_remaining,
-    shield_active, energy, max_energy, energy_regen_minutes } = gameState
+  const {
+    user, can_claim_daily, daily_reward_coins, daily_next_at,
+    shield_active, energy, max_energy, energy_regen_seconds,
+  } = gameState
 
   const botUsername = import.meta.env.VITE_BOT_USERNAME ?? 'YOUR_BOT'
   const refLink = `https://t.me/${botUsername}?start=ref_${user.id}`
+
+  // Цена покупки следующего юнита (растёт 1.12^count)
+  const nextUnitPrice = Math.round(50 * (1.12 ** user.units.length))
 
   const handleBuyUnit = async () => {
     setBuyLoading(true)
@@ -39,7 +46,14 @@ export function HomePage({ gameState, onRefresh }: Props) {
     finally { setShieldLoading(false) }
   }
 
-  const tabIcons: Record<Tab, string> = { main: '🏠', units: '⚔️', raid: '🗡', leaderboard: '🏆' }
+  const TABS: { key: Tab; label: string }[] = [
+    { key: 'main',        label: '🏠' },
+    { key: 'units',       label: '⚔️' },
+    { key: 'raid',        label: '🗡' },
+    { key: 'shop',        label: '🏪' },
+    { key: 'pets',        label: '🐾' },
+    { key: 'leaderboard', label: '🏆' },
+  ]
 
   return (
     <div style={styles.page}>
@@ -48,18 +62,18 @@ export function HomePage({ gameState, onRefresh }: Props) {
         shieldActive={shield_active}
         energy={energy}
         maxEnergy={max_energy}
-        energyRegenMinutes={energy_regen_minutes}
+        energyRegenSeconds={energy_regen_seconds}
         onRefresh={onRefresh}
       />
 
       <div style={styles.tabs}>
-        {(Object.keys(tabIcons) as Tab[]).map(t => (
+        {TABS.map(t => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            style={{ ...styles.tab, ...(tab === t ? styles.tabActive : {}) }}
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            style={{ ...styles.tab, ...(tab === t.key ? styles.tabActive : {}) }}
           >
-            {tabIcons[t]}
+            {t.label}
           </button>
         ))}
       </div>
@@ -68,11 +82,16 @@ export function HomePage({ gameState, onRefresh }: Props) {
         {/* ── Главная ── */}
         {tab === 'main' && (
           <>
-            <DailyReward canClaim={can_claim_daily} rewardCoins={daily_reward_coins} onClaimed={onRefresh} />
+            <DailyReward
+              canClaim={can_claim_daily}
+              rewardCoins={daily_reward_coins}
+              dailyNextAt={daily_next_at}
+              onClaimed={onRefresh}
+            />
 
             <div style={styles.actions}>
               <button onClick={handleBuyUnit} disabled={buyLoading} style={styles.actionBtn}>
-                {buyLoading ? '...' : `🧑‍⚔️ Нанять Warrior (${50} 💰)`}
+                {buyLoading ? '...' : `🧑‍⚔️ Нанять Warrior (${nextUnitPrice} 💰)`}
               </button>
               {!shield_active && (
                 <button onClick={handleBuyShield} disabled={shieldLoading}
@@ -120,6 +139,20 @@ export function HomePage({ gameState, onRefresh }: Props) {
           />
         )}
 
+        {/* ── Магазин ── */}
+        {tab === 'shop' && (
+          <Shop
+            onRefresh={onRefresh}
+            userCoins={user.coins}
+            userIron={user.iron}
+          />
+        )}
+
+        {/* ── Питомцы ── */}
+        {tab === 'pets' && (
+          <PetPanel onRefresh={onRefresh} />
+        )}
+
         {/* ── Лидерборд ── */}
         {tab === 'leaderboard' && <Leaderboard />}
       </div>
@@ -129,10 +162,10 @@ export function HomePage({ gameState, onRefresh }: Props) {
 
 const styles: Record<string, React.CSSProperties> = {
   page: { padding: '14px 12px', maxWidth: 480, margin: '0 auto' },
-  tabs: { display: 'flex', gap: 8, marginBottom: 14 },
+  tabs: { display: 'flex', gap: 6, marginBottom: 14 },
   tab: {
     flex: 1, background: 'rgba(255,255,255,0.07)', border: 'none',
-    borderRadius: 10, padding: '10px 0', fontSize: 20, cursor: 'pointer', color: '#fff'
+    borderRadius: 10, padding: '9px 0', fontSize: 18, cursor: 'pointer', color: '#fff'
   },
   tabActive: { background: '#5865F2' },
   actions: { display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 },

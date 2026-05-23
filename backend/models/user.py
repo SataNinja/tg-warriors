@@ -28,6 +28,11 @@ class User(Base):
 
     referrer_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
 
+    # Замок и прогрессия
+    castle_level: Mapped[int] = mapped_column(Integer, default=1)
+    win_streak: Mapped[int] = mapped_column(Integer, default=0)
+    iron: Mapped[int] = mapped_column(Integer, default=0)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -36,3 +41,5 @@ class User(Base):
     units: Mapped[list["Unit"]] = relationship("Unit", back_populates="owner", lazy="selectin")
     transactions: Mapped[list["Transaction"]] = relationship("Transaction", back_populates="user", lazy="noload")
     notifications: Mapped[list["Notification"]] = relationship("Notification", back_populates="user", lazy="noload")
+    weapon: Mapped[Optional["Weapon"]] = relationship("Weapon", back_populates="owner", uselist=False, lazy="selectin")
+    pets: Mapped[list["Pet"]] = relationship("Pet", back_populates="owner", lazy="selectin")

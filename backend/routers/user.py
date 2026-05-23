@@ -22,9 +22,11 @@ async def get_me(current_user: User = Depends(get_current_user)):
 async def get_state(current_user: User = Depends(get_current_user)):
     n = now_utc()
 
+    daily_next_at = None
     can_claim_daily = True
     if current_user.last_daily_reward:
-        can_claim_daily = n >= current_user.last_daily_reward + timedelta(hours=24)
+        daily_next_at = current_user.last_daily_reward + timedelta(hours=24)
+        can_claim_daily = n >= daily_next_at
 
     raid_cooldown_remaining = 0  # кулдаун отключён
 
@@ -37,10 +39,12 @@ async def get_state(current_user: User = Depends(get_current_user)):
         user=current_user,
         can_claim_daily=can_claim_daily,
         daily_reward_coins=settings.DAILY_REWARD_COINS,
+        daily_next_at=daily_next_at,
         raid_cooldown_remaining=raid_cooldown_remaining,
         shield_active=shield_active,
         energy=current_energy,
         max_energy=MAX_ENERGY,
+        energy_regen_seconds=regen_eta,
         energy_regen_minutes=regen_eta // 60
     )
 

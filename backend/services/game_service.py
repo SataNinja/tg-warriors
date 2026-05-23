@@ -52,8 +52,11 @@ async def _spend_energy(db: AsyncSession, user: User, amount: int = ENERGY_PER_R
 
 
 # ── Вспомогательные ───────────────────────────────────────────────────────────
-def _total_power(units: list[Unit]) -> int:
-    return sum(u.power for u in units)
+def _total_power(units: list[Unit], weapon=None, pets=None) -> int:
+    base = sum(u.power for u in units)
+    weapon_bonus = weapon.attack_bonus if weapon else 0
+    pet_bonus = sum(p.power_bonus for p in pets) if pets else 0
+    return base + weapon_bonus + pet_bonus
 
 
 def _display_name(user: User) -> str:
@@ -62,12 +65,20 @@ def _display_name(user: User) -> str:
 
 # ── Юниты ─────────────────────────────────────────────────────────────────────
 async def buy_unit(db: AsyncSession, user: User) -> Unit:
-    if user.coins < settings.UNIT_BUY_COST:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Недостаточно монет")
-    user.coins -= settings.UNIT_BUY_COST
+    from services.shop_service import get_castle_max_units
+    max_units = get_castle_max_units(user.castle_level)
+    if len(user.units) >= max_units:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            f"Лимит юнитов {max_units}. Улучши замок!")
+    # Цена растёт с каждым купленным юнитом: base × 1.12^count
+    base_cost = settings.UNIT_BUY_COST
+    price = int(base_cost * (1.12 ** len(user.units)))
+    if user.coins < price:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Нужно {price} монет")
+    user.coins -= price
     unit = Unit(owner_id=user.id)
     db.add(unit)
-    db.add(Transaction(user_id=user.id, amount=-settings.UNIT_BUY_COST,
+    db.add(Transaction(user_id=user.id, amount=-price,
                        type="buy_unit", description="Покупка юнита Warrior"))
     await db.commit()
     await db.refresh(unit)
@@ -108,8 +119,8 @@ async def do_raid(db: AsyncSession, attacker: User, target_id: int) -> RaidResul
     if defender.shield_until and defender.shield_until > now_utc():
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Цель защищена щитом")
 
-    attacker_power = _total_power(attacker.units)
-    defender_power = _total_power(defender.units)  # используем power, не defense
+    attacker_power = _total_power(attacker.units, attacker.weapon, attacker.pets)
+    defender_power = _total_power(defender.units, defender.weapon, defender.pets)
 
     if attacker_power == 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нужен хотя бы один юнит")
@@ -118,18 +129,35 @@ async def do_raid(db: AsyncSession, attacker: User, target_id: int) -> RaidResul
     coins_stolen = 0
 
     if success:
-        # Защитник теряет ровно столько, сколько атакующий получает
-        steal_amount = max(1, min(int(defender.coins * settings.RAID_STEAL_PERCENT), defender.coins))
+        # Базовая добыча
+        base_steal = max(1, min(int(defender.coins * settings.RAID_STEAL_PERCENT), defender.coins))
+        steal_amount = max(base_steal, random.randint(40, 70))
+        steal_amount = min(steal_amount, defender.coins)
+
         defender.coins -= steal_amount
         attacker.coins += steal_amount
         coins_stolen = steal_amount
-        db.add(Transaction(user_id=attacker.id, amount=steal_amount, type="steal",
+
+        # Win streak
+        attacker.win_streak += 1
+        streak_bonus = 0
+        if attacker.win_streak % 3 == 0:
+            streak_bonus = 50
+            attacker.coins += streak_bonus
+
+        # Железо за PvP победу
+        attacker.iron = getattr(attacker, 'iron', 0) + random.randint(2, 5)
+
+        db.add(Transaction(user_id=attacker.id, amount=steal_amount + streak_bonus, type="steal",
                            description=f"Рейд на {_display_name(defender)}"))
         db.add(Transaction(user_id=defender.id, amount=-steal_amount, type="lose",
                            description=f"Рейд от {_display_name(attacker)}"))
+        streak_msg = f" 🔥 Серия {attacker.win_streak}! +{streak_bonus} бонус!" if streak_bonus else ""
         await create_notification(db, defender.id,
             f"⚔️ <b>{_display_name(attacker)}</b> совершил рейд и украл <b>{steal_amount}</b> монет!")
     else:
+        attacker.win_streak = 0
+        streak_msg = ""
         await create_notification(db, defender.id,
             f"🛡 <b>{_display_name(attacker)}</b> пытался атаковать, но провалился!")
 
@@ -140,7 +168,10 @@ async def do_raid(db: AsyncSession, attacker: User, target_id: int) -> RaidResul
     await db.commit()
     await db.refresh(attacker)
 
-    msg = f"Победа! Украдено {coins_stolen} монет" if success else "Рейд провален — противник сильнее"
+    if success:
+        msg = f"Победа! Украдено {coins_stolen} монет{streak_msg}"
+    else:
+        msg = "Рейд провален — противник сильнее"
     return RaidResult(
         success=success, coins_stolen=coins_stolen,
         attacker_power=attacker_power, defender_power=defender_power,
@@ -152,7 +183,7 @@ async def do_raid(db: AsyncSession, attacker: User, target_id: int) -> RaidResul
 async def do_pve_raid(db: AsyncSession, attacker: User) -> PveRaidResult:
     await _spend_energy(db, attacker)
 
-    attacker_power = _total_power(attacker.units)
+    attacker_power = _total_power(attacker.units, attacker.weapon, attacker.pets)
     if attacker_power == 0:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нужен хотя бы один юнит")
 
@@ -162,13 +193,36 @@ async def do_pve_raid(db: AsyncSession, attacker: User) -> PveRaidResult:
     coins_lost = 0
 
     if success:
-        coins_earned = 15 + attacker_power * 2
+        # Случайная награда 15-25 монет + бонус замка + бонус серии
+        from services.shop_service import get_castle_income_bonus
+        base = random.randint(15, 25)
+        income_bonus_pct = get_castle_income_bonus(attacker.castle_level)
+        # Бонус от питомца-ворона (+8% монет)
+        raven_bonus = sum(p.gold_bonus for p in attacker.pets)
+        total_mult = 1.0 + (income_bonus_pct + raven_bonus) / 100.0
+        coins_earned = int(base * total_mult)
+
         attacker.coins += coins_earned
-        db.add(Transaction(user_id=attacker.id, amount=coins_earned, type="earn",
+        attacker.win_streak = getattr(attacker, 'win_streak', 0) + 1
+
+        # Серия побед: каждые 3 — бонус +50
+        streak_bonus = 0
+        if attacker.win_streak % 3 == 0:
+            streak_bonus = 50
+            attacker.coins += streak_bonus
+
+        # Железо за PvE победу
+        attacker.iron = getattr(attacker, 'iron', 0) + random.randint(3, 8)
+
+        db.add(Transaction(user_id=attacker.id, amount=coins_earned + streak_bonus, type="earn",
                            description="Победа в PvE бою"))
+        streak_msg = f" 🔥 Серия {attacker.win_streak}! +{streak_bonus} бонус!" if streak_bonus else ""
     else:
-        coins_lost = min(10 + attacker_power, attacker.coins)
+        coins_lost = min(random.randint(5, 15), attacker.coins)
         attacker.coins -= coins_lost
+        attacker.win_streak = 0
+        coins_earned = 0
+        streak_msg = ""
         db.add(Transaction(user_id=attacker.id, amount=-coins_lost, type="lose",
                            description="Поражение в PvE бою"))
 
@@ -179,7 +233,7 @@ async def do_pve_raid(db: AsyncSession, attacker: User) -> PveRaidResult:
     return PveRaidResult(
         success=success, coins_earned=coins_earned, coins_lost=coins_lost,
         attacker_power=attacker_power, bot_power=bot_power,
-        message=f"Победа! +{coins_earned} монет" if success else f"Поражение. -{coins_lost} монет",
+        message=f"Победа! +{coins_earned} монет{streak_msg}" if success else f"Поражение. -{coins_lost} монет",
         energy_left=get_current_energy(attacker)
     )
 

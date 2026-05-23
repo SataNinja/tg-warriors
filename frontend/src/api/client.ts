@@ -77,3 +77,45 @@ export async function fetchBattles() {
   const { data } = await api.get('/raid/journal')
   return data
 }
+
+// ── Магазин ──────────────────────────────────────────────────────────────────
+export async function fetchCastleInfo() {
+  const { data } = await api.get('/shop/castle')
+  return data
+}
+
+export async function upgradeCastle() {
+  const { data } = await api.post('/shop/castle/upgrade')
+  return data
+}
+
+export async function fetchWeaponInfo() {
+  const { data } = await api.get('/shop/weapon')
+  return data
+}
+
+export async function buyWeapon() {
+  const { data } = await api.post('/shop/weapon/buy')
+  return data
+}
+
+export async function upgradeWeapon() {
+  const { data } = await api.post('/shop/weapon/upgrade')
+  return data
+}
+
+export async function buyEgg(eggType: string) {
+  const { data } = await api.post('/shop/egg/buy', { egg_type: eggType })
+  return data
+}
+
+// ── Питомцы ──────────────────────────────────────────────────────────────────
+export async function fetchPets() {
+  const { data } = await api.get('/pets')
+  return data
+}
+
+export async function doPetBattle(petId: number) {
+  const { data } = await api.post('/pets/battle', { pet_id: petId })
+  return data
+}
