@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { PetOut, PetBattleResult } from '../types'
 import { fetchPets, doPetBattle } from '../api/client'
 
@@ -77,11 +77,72 @@ function PetCard({ pet, onBattle }: { pet: PetOut; onBattle: (id: number) => voi
   )
 }
 
+// Мини-анимация боя питомцев
+function PetFightAnimation({ myEmoji, botEmoji, onDone }: { myEmoji: string; botEmoji: string; onDone: () => void }) {
+  const [frame, setFrame] = useState(0)
+  const CLASH = ['💥', '⚡', '✨', '🔥', '💢']
+  const totalFrames = 30
+  const frameRef = useRef(0)
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      frameRef.current += 1
+      setFrame(frameRef.current)
+      if (frameRef.current >= totalFrames) { clearInterval(id); onDone() }
+    }, 200)
+    return () => clearInterval(id)
+  }, [onDone])
+
+  const t = frame / totalFrames
+  const myX = Math.min(35, t * 38)        // движется вправо
+  const botX = Math.max(55, 100 - t * 40) // движется влево (в % правого края → конвертируем в left)
+  const clash = t > 0.45 && t < 0.8
+
+  return (
+    <div style={fightStyles.wrap}>
+      <div style={fightStyles.title}>🥊 Бой питомцев!</div>
+      <div style={fightStyles.arena}>
+        {/* Мой питомец — двигается вправо */}
+        <span style={{ ...fightStyles.pet, left: `${myX}%`, transition: 'left 0.2s linear' }}>
+          {myEmoji}
+        </span>
+        {/* Противник — двигается влево */}
+        <span style={{ ...fightStyles.pet, left: `${botX}%`, transform: 'scaleX(-1)', transition: 'left 0.2s linear' }}>
+          {botEmoji}
+        </span>
+        {/* Вспышки столкновений */}
+        {clash && (
+          <span style={{ ...fightStyles.clash, left: '47%' }}>
+            {CLASH[frame % CLASH.length]}
+          </span>
+        )}
+      </div>
+      <div style={fightStyles.label}>
+        {t < 0.4 ? 'Питомцы сходятся...' : t < 0.7 ? 'Схватка!' : 'Исход решается...'}
+      </div>
+    </div>
+  )
+}
+
+const fightStyles: Record<string, React.CSSProperties> = {
+  wrap: { background: 'rgba(255,255,255,0.06)', borderRadius: 14, padding: 14, marginBottom: 12 },
+  title: { textAlign: 'center', fontWeight: 800, fontSize: 16, marginBottom: 10 },
+  arena: {
+    height: 70, background: 'rgba(0,0,0,0.2)', borderRadius: 10,
+    position: 'relative', overflow: 'hidden', marginBottom: 8,
+  },
+  pet: { position: 'absolute', top: '25%', fontSize: 32 },
+  clash: { position: 'absolute', top: '15%', fontSize: 30, zIndex: 2 },
+  label: { textAlign: 'center', fontSize: 12, opacity: 0.7 },
+}
+
 export function PetPanel({ onRefresh }: Props) {
   const [pets, setPets] = useState<PetOut[]>([])
   const [loading, setLoading] = useState(true)
   const [battleResult, setBattleResult] = useState<PetBattleResult | null>(null)
+  const [fightingPet, setFightingPet] = useState<{ emoji: string; petId: number } | null>(null)
   const [battling, setBattling] = useState(false)
+  const pendingResult = useRef<PetBattleResult | null>(null)
 
   const reload = useCallback(() => {
     fetchPets().then(setPets).catch(console.error).finally(() => setLoading(false))
@@ -89,21 +150,39 @@ export function PetPanel({ onRefresh }: Props) {
 
   useEffect(() => { reload() }, [reload])
 
-  const handleBattle = async (petId: number) => {
+  const handleBattle = async (petId: number, petEmoji: string) => {
     setBattling(true)
     try {
       const res: PetBattleResult = await doPetBattle(petId)
-      setBattleResult(res)
-      reload()
-      onRefresh()
+      pendingResult.current = res
+      setFightingPet({ emoji: petEmoji, petId })
     } catch (e: any) {
       alert(e?.response?.data?.detail ?? 'Ошибка')
-    } finally {
       setBattling(false)
     }
   }
 
+  const handleFightDone = () => {
+    setFightingPet(null)
+    setBattleResult(pendingResult.current)
+    pendingResult.current = null
+    setBattling(false)
+    reload()
+    onRefresh()
+  }
+
   if (loading) return <div style={styles.loading}>Загрузка питомцев...</div>
+
+  // Анимация боя питомца
+  if (fightingPet) {
+    return (
+      <PetFightAnimation
+        myEmoji={fightingPet.emoji}
+        botEmoji="🤖"
+        onDone={handleFightDone}
+      />
+    )
+  }
 
   return (
     <div style={styles.wrap}>
@@ -129,7 +208,7 @@ export function PetPanel({ onRefresh }: Props) {
         </div>
       ) : (
         pets.map(p => (
-          <PetCard key={p.id} pet={p} onBattle={battling ? () => {} : handleBattle} />
+          <PetCard key={p.id} pet={p} onBattle={battling ? () => {} : (id) => handleBattle(id, PET_EMOJIS[p.pet_type] ?? '🐾')} />
         ))
       )}
 

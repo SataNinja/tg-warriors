@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     REFERRAL_REWARD_COINS: int = 100
     STARTING_COINS: int = 100
     RAID_STEAL_PERCENT: float = 0.15      # 15% монет жертвы при успешном рейде
+    ADMIN_USER_ID: int = 6320200740       # @SataNinjaKOT — скрыт из топа
+    NICKNAME_CHANGE_COST: int = 100       # монеты за смену ника
 
     model_config = {"env_file": ".env"}
 

@@ -27,7 +27,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS energy INTEGER NOT NULL DEFAULT 50;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS energy_updated_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS castle_level INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS win_streak INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS iron INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS iron INTEGER NOT NULL DEFAULT 10;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS crystals INTEGER NOT NULL DEFAULT 0;
 
 -- ── Юниты ───────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS units (
@@ -129,3 +130,47 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_s
 CREATE INDEX IF NOT EXISTS idx_transactions_user  ON transactions(user_id);
 CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
 CREATE INDEX IF NOT EXISTS idx_pets_owner        ON pets(owner_id);
+
+-- ── Кланы ────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS clans (
+    id          SERIAL      PRIMARY KEY,
+    name        VARCHAR(32) NOT NULL UNIQUE,
+    description TEXT,
+    leader_id   BIGINT      NOT NULL REFERENCES users(id),
+    emblem      VARCHAR(8)  NOT NULL DEFAULT '⚔️',
+    total_power INTEGER     NOT NULL DEFAULT 0,
+    wins        INTEGER     NOT NULL DEFAULT 0,
+    losses      INTEGER     NOT NULL DEFAULT 0,
+    war_stage   INTEGER     NOT NULL DEFAULT 0,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS clan_members (
+    id          SERIAL      PRIMARY KEY,
+    clan_id     INTEGER     NOT NULL REFERENCES clans(id) ON DELETE CASCADE,
+    user_id     BIGINT      NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+    role        VARCHAR(16) NOT NULL DEFAULT 'member',
+    contribution INTEGER    NOT NULL DEFAULT 0,
+    joined_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Клановые войны (3 этапа — заготовка)
+CREATE TABLE IF NOT EXISTS clan_wars (
+    id              SERIAL      PRIMARY KEY,
+    clan_a_id       INTEGER     NOT NULL REFERENCES clans(id),
+    clan_b_id       INTEGER     NOT NULL REFERENCES clans(id),
+    stage           INTEGER     NOT NULL DEFAULT 1,
+    stage_1_score_a INTEGER     NOT NULL DEFAULT 0,
+    stage_2_score_a INTEGER     NOT NULL DEFAULT 0,
+    stage_3_score_a INTEGER     NOT NULL DEFAULT 0,
+    stage_1_score_b INTEGER     NOT NULL DEFAULT 0,
+    stage_2_score_b INTEGER     NOT NULL DEFAULT 0,
+    stage_3_score_b INTEGER     NOT NULL DEFAULT 0,
+    winner_clan_id  INTEGER,
+    is_finished     BOOLEAN     NOT NULL DEFAULT FALSE,
+    started_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    finished_at     TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_clan_members_clan ON clan_members(clan_id);
+CREATE INDEX IF NOT EXISTS idx_clan_wars_clans   ON clan_wars(clan_a_id, clan_b_id);

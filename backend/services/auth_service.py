@@ -85,6 +85,8 @@ async def get_or_create_user(
         first_name=telegram_user.get("first_name", ""),
         last_name=telegram_user.get("last_name"),
         coins=settings.STARTING_COINS,
+        iron=10,        # стартовый запас железа для первой прокачки оружия
+        crystals=0,
         referrer_id=referrer_id if referrer_id != user_id else None
     )
     db.add(user)

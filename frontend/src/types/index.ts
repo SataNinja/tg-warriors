@@ -18,6 +18,7 @@ export interface User {
   nickname: string | null
   coins: number
   iron: number
+  crystals: number
   energy: number
   castle_level: number
   win_streak: number

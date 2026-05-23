@@ -31,7 +31,8 @@ class User(Base):
     # Замок и прогрессия
     castle_level: Mapped[int] = mapped_column(Integer, default=1)
     win_streak: Mapped[int] = mapped_column(Integer, default=0)
-    iron: Mapped[int] = mapped_column(Integer, default=0)
+    iron: Mapped[int] = mapped_column(Integer, default=10)       # стартуют с 10 железа
+    crystals: Mapped[int] = mapped_column(Integer, default=0)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

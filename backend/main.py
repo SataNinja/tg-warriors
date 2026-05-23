@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from core.database import engine, _get_db_url
-from routers import auth, user, unit, raid, shield, referral, leaderboard, daily, internal, shop, pets
+from routers import auth, user, unit, raid, shield, referral, leaderboard, daily, internal, shop, pets, admin, clans
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,8 @@ app.include_router(daily.router)
 app.include_router(internal.router)
 app.include_router(shop.router)
 app.include_router(pets.router)
+app.include_router(admin.router)
+app.include_router(clans.router)
 
 
 @app.get("/health")

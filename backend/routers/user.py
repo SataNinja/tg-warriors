@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from core.database import get_db
+from fastapi import HTTPException
 from models.user import User
 from routers.deps import get_current_user
 from schemas.user import UserOut, GameStateOut, NicknameRequest, NicknameResponse
@@ -55,7 +56,18 @@ async def set_nickname(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Сменить никнейм (3-20 символов)."""
+    """Сменить никнейм (3-20 символов). Первый раз бесплатно, потом 100 монет."""
+    from models.transaction import Transaction
+    cost = 0 if current_user.nickname is None else settings.NICKNAME_CHANGE_COST
+    if cost > 0:
+        if current_user.coins < cost:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Смена ника стоит {cost} монет. У тебя {current_user.coins}."
+            )
+        current_user.coins -= cost
+        db.add(Transaction(user_id=current_user.id, amount=-cost,
+                           type="nickname", description="Смена никнейма"))
     current_user.nickname = body.nickname
     await db.commit()
     return NicknameResponse(nickname=body.nickname)

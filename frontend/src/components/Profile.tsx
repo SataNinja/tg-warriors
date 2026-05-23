@@ -69,22 +69,26 @@ export function Profile({ user, shieldActive, energy, maxEnergy, energyRegenSeco
                 style={styles.input}
                 placeholder="Никнейм (3-20 симв.)"
               />
-              <button onClick={handleSaveNick} disabled={loading} style={styles.saveBtn}>
-                {loading ? '...' : '✓'}
+              <button onClick={handleSaveNick} disabled={loading} style={styles.saveBtn}
+                title={user.nickname ? 'Стоит 100 💰' : 'Бесплатно'}>
+                {loading ? '...' : user.nickname ? '✓ 100💰' : '✓ Free'}
               </button>
               <button onClick={() => setEditing(false)} style={styles.cancelBtn}>✕</button>
             </div>
           ) : (
             <div style={styles.nameRow}>
               <span style={styles.name}>{displayName}</span>
-              <button onClick={() => setEditing(true)} style={styles.editBtn} title="Сменить никнейм">✏️</button>
+              <button onClick={() => setEditing(true)} style={styles.editBtn}
+                title={user.nickname ? 'Сменить никнейм (100 💰)' : 'Установить никнейм (бесплатно)'}>
+                ✏️
+              </button>
             </div>
           )}
           <div style={styles.userId}>ID: {user.id}</div>
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={styles.coins}>💰 {user.coins.toLocaleString()}</div>
-          {user.iron > 0 && <div style={styles.iron}>🔩 {user.iron}</div>}
+          <div style={styles.iron}>🔩 {user.iron} {user.crystals > 0 && <span>· 💎 {user.crystals}</span>}</div>
         </div>
       </div>
 

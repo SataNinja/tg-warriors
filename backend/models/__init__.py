@@ -7,9 +7,10 @@ from .notification import Notification
 from .transaction import Transaction
 from .weapon import Weapon
 from .pet import Pet
+from .clan import Clan, ClanMember, ClanWar
 
 __all__ = [
     "User", "Unit", "Raid", "MarketListing",
     "Referral", "Notification", "Transaction",
-    "Weapon", "Pet",
+    "Weapon", "Pet", "Clan", "ClanMember", "ClanWar",
 ]

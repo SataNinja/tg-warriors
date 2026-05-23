@@ -1,106 +1,205 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 
 interface Props {
   attackerPower: number
   defenderPower: number
   isPve: boolean
+  attackerCastleLevel?: number
+  defenderCastleLevel?: number
   onComplete: () => void
 }
 
-// Чем ближе силы — тем дольше бой
+const CASTLE_EMOJIS: Record<number, string> = {
+  1: '🏘', 2: '🏰', 3: '🏯', 4: '🗼', 5: '🏰',
+  6: '🐉', 7: '🛡️', 8: '👑', 9: '🌟', 10: '💎',
+}
+
+const ATTACKER_UNITS = ['🧑‍⚔️', '⚔️', '🏹', '🗡️', '💪']
+const DEFENDER_UNITS = ['👹', '🤺', '🗡️', '🏹', '😤']
+const BOT_UNITS      = ['🤖', '⚙️', '🔩', '💻', '🤖']
+const CLASH_EMOJIS   = ['💥', '✨', '🔥', '⚡', '💢', '🌪️']
+
 function calcDuration(ap: number, dp: number): number {
   const diff = Math.abs(ap - dp)
   const maxPower = Math.max(ap, dp, 1)
-  const ratio = diff / maxPower  // 0 (равные) → 1 (огромная разница)
-  const base = 35_000
-  const bonus = (1 - ratio) * 20_000  // равные силы +20с
-  const jitter = (Math.random() - 0.5) * 10_000
+  const ratio = diff / maxPower
+  const base = 40_000
+  const bonus = (1 - ratio) * 20_000
+  const jitter = (Math.random() - 0.5) * 8_000
   return Math.round(Math.max(30_000, Math.min(60_000, base + bonus + jitter)))
 }
 
+interface Soldier {
+  id: number
+  emoji: string
+  side: 'attacker' | 'defender'
+  x: number
+  y: number
+}
+
+interface Clash {
+  id: number
+  emoji: string
+  x: number
+  y: number
+}
+
 const PHASES = [
-  { label: 'Бойцы занимают позиции...', emojis: ['⚔️', '🛡️', '💪', '😤'] },
-  { label: 'Бой начался!', emojis: ['💥', '⚔️', '🗡️', '💢', '🔥'] },
-  { label: 'Натиск усиливается...', emojis: ['💥', '⚡', '🔥', '💢', '❗'] },
-  { label: 'Решающий удар!', emojis: ['💥', '💥', '⚔️', '✨', '🌪️'] },
+  'Армии выдвигаются...',
+  'Первая волна атаки!',
+  'Битва в разгаре!',
+  'Решающий штурм!',
 ]
 
-export function BattleAnimation({ attackerPower, defenderPower, isPve, onComplete }: Props) {
-  const [phase, setPhase] = useState(0)
-  const [emojiBurst, setEmojiBurst] = useState<string[]>([])
+export function BattleAnimation({
+  attackerPower, defenderPower, isPve,
+  attackerCastleLevel = 1, defenderCastleLevel = 1,
+  onComplete
+}: Props) {
   const [progress, setProgress] = useState(0)
-  const [duration] = useState(() => calcDuration(attackerPower, defenderPower))
+  const [phase, setPhase] = useState(0)
+  const [soldiers, setSoldiers] = useState<Soldier[]>([])
+  const [clashes, setClashes] = useState<Clash[]>([])
+  const dur = useRef(calcDuration(attackerPower, defenderPower))
+  const soldierIdRef = useRef(0)
+  const clashIdRef = useRef(0)
+
+  const atkCastle = CASTLE_EMOJIS[attackerCastleLevel] ?? '🏘'
+  const defCastle = isPve ? '🤖' : (CASTLE_EMOJIS[defenderCastleLevel] ?? '🏘')
+  const defPool = isPve ? BOT_UNITS : DEFENDER_UNITS
 
   // Прогресс-бар
   useEffect(() => {
     const start = Date.now()
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - start
-      const pct = Math.min(100, (elapsed / duration) * 100)
+    const id = setInterval(() => {
+      const pct = Math.min(100, ((Date.now() - start) / dur.current) * 100)
       setProgress(pct)
-      if (pct >= 100) {
-        clearInterval(interval)
-        onComplete()
-      }
+      setPhase(Math.min(3, Math.floor(pct / 25)))
+      if (pct >= 100) { clearInterval(id); onComplete() }
     }, 100)
-    return () => clearInterval(interval)
-  }, [duration, onComplete])
+    return () => clearInterval(id)
+  }, [onComplete])
 
-  // Смена фаз
+  // Спавн солдат
   useEffect(() => {
-    const phaseInterval = duration / PHASES.length
-    const timers = PHASES.map((_, i) =>
-      setTimeout(() => setPhase(i), i * phaseInterval)
-    )
-    return () => timers.forEach(clearTimeout)
-  }, [duration])
+    const id = setInterval(() => {
+      const isAtk = Math.random() > 0.45
+      const pool = isAtk ? ATTACKER_UNITS : defPool
+      setSoldiers(prev => [
+        ...prev.slice(-14),
+        {
+          id: soldierIdRef.current++,
+          emoji: pool[Math.floor(Math.random() * pool.length)],
+          side: isAtk ? 'attacker' : 'defender',
+          x: isAtk ? 2 + Math.random() * 20 : 78 + Math.random() * 20,
+          y: 10 + Math.random() * 60,
+        }
+      ])
+    }, 1200)
+    return () => clearInterval(id)
+  }, [defPool])
 
-  // Случайные эмодзи каждые 800мс
+  // Движение + столкновения
   useEffect(() => {
-    const interval = setInterval(() => {
-      const pool = PHASES[phase]?.emojis ?? PHASES[1].emojis
-      const burst = Array.from({ length: 3 + Math.floor(Math.random() * 3) },
-        () => pool[Math.floor(Math.random() * pool.length)])
-      setEmojiBurst(burst)
-    }, 800)
-    return () => clearInterval(interval)
-  }, [phase])
+    const id = setInterval(() => {
+      setSoldiers(prev => {
+        const moved = prev.map(s => ({
+          ...s,
+          x: s.side === 'attacker'
+            ? Math.min(s.x + 3, 50)
+            : Math.max(s.x - 3, 50),
+        }))
 
-  const secLeft = Math.ceil(((100 - progress) / 100) * duration / 1000)
+        const atkrs = moved.filter(s => s.side === 'attacker' && s.x >= 46)
+        const defrs = moved.filter(s => s.side === 'defender' && s.x <= 54)
+
+        if (atkrs.length && defrs.length) {
+          const clash: Clash = {
+            id: clashIdRef.current++,
+            emoji: CLASH_EMOJIS[Math.floor(Math.random() * CLASH_EMOJIS.length)],
+            x: 42 + Math.random() * 16,
+            y: 10 + Math.random() * 70,
+          }
+          setClashes(c => [...c.slice(-6), clash])
+          const rmAtk = atkrs[0].id
+          const rmDef = defrs[0].id
+          return moved.filter(s => s.id !== rmAtk && s.id !== rmDef)
+        }
+        return moved
+      })
+    }, 280)
+    return () => clearInterval(id)
+  }, [])
+
+  // Убираем вспышки
+  useEffect(() => {
+    if (!clashes.length) return
+    const id = setTimeout(() => setClashes([]), 500)
+    return () => clearTimeout(id)
+  }, [clashes])
+
+  const secLeft = Math.max(0, Math.ceil(((100 - progress) / 100) * dur.current / 1000))
 
   return (
     <div style={styles.wrap}>
-      {/* Заголовок */}
-      <div style={styles.title}>
-        {isPve ? '🤖 PvE Бой' : '⚔️ PvP Рейд'}
-      </div>
+      <div style={styles.title}>{isPve ? '🤖 PvE Бой' : '⚔️ PvP Рейд'}</div>
 
-      {/* Силы */}
-      <div style={styles.powers}>
-        <div style={styles.side}>
-          <div style={styles.emojiChar}>🧑‍⚔️</div>
-          <div style={styles.powerVal}>{attackerPower}</div>
-          <div style={styles.powerLabel}>Ты</div>
+      {/* Замки */}
+      <div style={styles.castleRow}>
+        <div style={styles.castle}>
+          <div style={styles.castleEmoji}>{defCastle}</div>
+          <div style={styles.castleLabel}>{isPve ? 'Бот' : 'Противник'}</div>
+          <div style={styles.powerVal}>⚔️ {defenderPower}</div>
         </div>
         <div style={styles.vs}>VS</div>
-        <div style={styles.side}>
-          <div style={styles.emojiChar}>{isPve ? '🤖' : '👹'}</div>
-          <div style={styles.powerVal}>{defenderPower}</div>
-          <div style={styles.powerLabel}>{isPve ? 'Бот' : 'Враг'}</div>
+        <div style={styles.castle}>
+          <div style={styles.castleEmoji}>{atkCastle}</div>
+          <div style={styles.castleLabel}>Ты</div>
+          <div style={styles.powerVal}>⚔️ {attackerPower}</div>
         </div>
       </div>
 
-      {/* Взрыв эмодзи */}
-      <div style={styles.burst}>
-        {emojiBurst.map((e, i) => (
-          <span key={i} style={{ fontSize: 28 + i * 4, margin: '0 4px' }}>{e}</span>
+      {/* Поле боя */}
+      <div style={styles.field}>
+        {/* Линия фронта */}
+        <div style={styles.frontLine} />
+
+        {soldiers.map(s => (
+          <span
+            key={s.id}
+            style={{
+              position: 'absolute',
+              left: `${s.x}%`,
+              top: `${s.y}%`,
+              fontSize: 20,
+              transform: s.side === 'defender' ? 'scaleX(-1)' : 'none',
+              transition: 'left 0.28s linear',
+              lineHeight: 1,
+            }}
+          >
+            {s.emoji}
+          </span>
+        ))}
+
+        {clashes.map(c => (
+          <span
+            key={c.id}
+            style={{
+              position: 'absolute',
+              left: `${c.x}%`,
+              top: `${c.y}%`,
+              fontSize: 26,
+              zIndex: 2,
+              animation: 'none',
+            }}
+          >
+            {c.emoji}
+          </span>
         ))}
       </div>
 
-      {/* Фаза */}
-      <div style={styles.phaseText}>{PHASES[phase]?.label}</div>
+      <div style={styles.phase}>{PHASES[phase]}</div>
 
-      {/* Прогресс-бар */}
       <div style={styles.track}>
         <div style={{ ...styles.fill, width: `${progress}%` }} />
       </div>
@@ -113,20 +212,47 @@ const styles: Record<string, React.CSSProperties> = {
   wrap: {
     background: 'rgba(255,255,255,0.06)',
     borderRadius: 18,
-    padding: '20px 16px',
-    textAlign: 'center',
-    marginBottom: 12
+    padding: '16px 14px',
+    marginBottom: 12,
   },
-  title: { fontSize: 18, fontWeight: 800, marginBottom: 16 },
-  powers: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20, marginBottom: 16 },
-  side: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 },
-  emojiChar: { fontSize: 36 },
-  powerVal: { fontSize: 22, fontWeight: 800, color: '#FFD700' },
-  powerLabel: { fontSize: 12, opacity: 0.6 },
-  vs: { fontSize: 20, fontWeight: 900, color: '#f87171', padding: '0 8px' },
-  burst: { minHeight: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  phaseText: { fontSize: 14, opacity: 0.8, marginBottom: 14, minHeight: 20 },
-  track: { height: 8, background: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden', marginBottom: 6 },
-  fill: { height: '100%', background: 'linear-gradient(90deg, #6366f1, #a855f7)', borderRadius: 4, transition: 'width 0.1s' },
-  timer: { fontSize: 12, opacity: 0.5 }
+  title: { fontSize: 17, fontWeight: 800, textAlign: 'center', marginBottom: 10 },
+  castleRow: {
+    display: 'flex', justifyContent: 'space-between',
+    alignItems: 'center', padding: '0 12px', marginBottom: 8,
+  },
+  castle: { textAlign: 'center', minWidth: 70 },
+  castleEmoji: { fontSize: 44 },
+  castleLabel: { fontSize: 11, opacity: 0.5 },
+  powerVal: { fontSize: 12, color: '#FFD700', fontWeight: 700, marginTop: 2 },
+  vs: { fontSize: 20, fontWeight: 900, color: '#f87171' },
+  field: {
+    height: 100,
+    background: 'rgba(0,0,0,0.25)',
+    borderRadius: 10,
+    position: 'relative',
+    overflow: 'hidden',
+    marginBottom: 8,
+    border: '1px solid rgba(255,255,255,0.07)',
+  },
+  frontLine: {
+    position: 'absolute',
+    left: '50%',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    background: 'rgba(255,255,255,0.08)',
+    transform: 'translateX(-50%)',
+  },
+  phase: { textAlign: 'center', fontSize: 13, opacity: 0.8, minHeight: 18, marginBottom: 10 },
+  track: {
+    height: 8, background: 'rgba(255,255,255,0.1)',
+    borderRadius: 4, overflow: 'hidden', marginBottom: 5,
+  },
+  fill: {
+    height: '100%',
+    background: 'linear-gradient(90deg, #dc2626, #f59e0b)',
+    borderRadius: 4,
+    transition: 'width 0.1s',
+  },
+  timer: { fontSize: 12, opacity: 0.5, textAlign: 'center' },
 }

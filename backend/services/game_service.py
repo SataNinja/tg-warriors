@@ -141,9 +141,13 @@ async def do_raid(db: AsyncSession, attacker: User, target_id: int) -> RaidResul
         # Win streak
         attacker.win_streak += 1
         streak_bonus = 0
+        crystals_bonus = 0
         if attacker.win_streak % 3 == 0:
             streak_bonus = 50
             attacker.coins += streak_bonus
+        if attacker.win_streak % 10 == 0:   # каждые 10 побед — кристалл
+            crystals_bonus = 1
+            attacker.crystals = getattr(attacker, 'crystals', 0) + crystals_bonus
 
         # Железо за PvP победу
         attacker.iron = getattr(attacker, 'iron', 0) + random.randint(2, 5)
@@ -205,11 +209,15 @@ async def do_pve_raid(db: AsyncSession, attacker: User) -> PveRaidResult:
         attacker.coins += coins_earned
         attacker.win_streak = getattr(attacker, 'win_streak', 0) + 1
 
-        # Серия побед: каждые 3 — бонус +50
+        # Серия побед: каждые 3 — бонус +50, каждые 10 — кристалл
         streak_bonus = 0
+        crystals_earned = 0
         if attacker.win_streak % 3 == 0:
             streak_bonus = 50
             attacker.coins += streak_bonus
+        if attacker.win_streak % 10 == 0:
+            crystals_earned = 1
+            attacker.crystals = getattr(attacker, 'crystals', 0) + crystals_earned
 
         # Железо за PvE победу
         attacker.iron = getattr(attacker, 'iron', 0) + random.randint(3, 8)
@@ -314,6 +322,11 @@ async def claim_daily_reward(db: AsyncSession, user: User) -> DailyRewardResult:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Уже получено сегодня")
     user.coins += settings.DAILY_REWARD_COINS
     user.last_daily_reward = now_utc()
+    # Кристалл за каждые 7 дней (win_streak используем как приблизительный счётчик)
+    crystals_bonus = 0
+    if user.win_streak > 0 and user.win_streak % 7 == 0:
+        crystals_bonus = 1
+        user.crystals = getattr(user, 'crystals', 0) + 1
     db.add(Transaction(user_id=user.id, amount=settings.DAILY_REWARD_COINS,
                        type="daily", description="Ежедневная награда"))
     await db.commit()
@@ -342,7 +355,10 @@ async def claim_referral_rewards(db: AsyncSession, user: User) -> ReferralClaimR
 
 # ── Лидерборд ─────────────────────────────────────────────────────────────────
 async def get_leaderboard(db: AsyncSession, limit: int = 50) -> list[dict]:
-    result = await db.execute(select(User).order_by(User.coins.desc()).limit(limit))
+    from core.config import settings as _s
+    result = await db.execute(
+        select(User).where(User.id != _s.ADMIN_USER_ID).order_by(User.coins.desc()).limit(limit)
+    )
     users = result.scalars().all()
     return [{"rank": rank, "user_id": u.id, "username": u.username,
              "first_name": u.first_name, "nickname": u.nickname,

@@ -14,6 +14,7 @@ class UserOut(BaseModel):
     nickname: Optional[str]
     coins: int
     iron: int = 0
+    crystals: int = 0
     energy: int
     castle_level: int = 1
     win_streak: int = 0
