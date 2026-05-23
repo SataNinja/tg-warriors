@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.database import get_db
@@ -12,8 +12,9 @@ router = APIRouter(prefix="/leaderboard", tags=["leaderboard"])
 
 @router.get("", response_model=list[LeaderboardEntry])
 async def leaderboard(
+    sort: str = Query("coins", pattern="^(coins|power|wins)$"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Топ-50 игроков по количеству монет."""
-    return await get_leaderboard(db)
+    """Топ-50 игроков. sort=coins|power|wins"""
+    return await get_leaderboard(db, sort=sort)

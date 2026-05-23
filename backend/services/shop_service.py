@@ -16,18 +16,28 @@ from schemas.shop import (
 
 # ── Данные замка ──────────────────────────────────────────────────────────────
 CASTLE_DATA = {
-    1:  {"name": "Деревня",          "max_units": 3,  "income_bonus": 0},
-    2:  {"name": "Крепость",         "max_units": 4,  "income_bonus": 0,   "cost": 200},
-    3:  {"name": "Замок",            "max_units": 5,  "income_bonus": 5,   "cost": 360},
-    4:  {"name": "Цитадель",         "max_units": 6,  "income_bonus": 5,   "cost": 648},
-    5:  {"name": "Бастион",          "max_units": 7,  "income_bonus": 10,  "cost": 1166},
-    6:  {"name": "Крепость Дракона", "max_units": 8,  "income_bonus": 10,  "cost": 2099},
-    7:  {"name": "Твердыня",         "max_units": 9,  "income_bonus": 15,  "cost": 3778},
-    8:  {"name": "Легендарный Замок","max_units": 10, "income_bonus": 15,  "cost": 6800},
-    9:  {"name": "Небесная Цитадель","max_units": 12, "income_bonus": 20,  "cost": 12240},
-    10: {"name": "Вечная Твердыня",  "max_units": 15, "income_bonus": 25,  "cost": 22032},
+    1:  {"name": "Деревня",            "max_units": 3,  "income_bonus": 0},
+    2:  {"name": "Крепость",           "max_units": 4,  "income_bonus": 0,   "cost": 200},
+    3:  {"name": "Замок",              "max_units": 5,  "income_bonus": 5,   "cost": 360},
+    4:  {"name": "Цитадель",           "max_units": 6,  "income_bonus": 5,   "cost": 648},
+    5:  {"name": "Бастион",            "max_units": 7,  "income_bonus": 10,  "cost": 1166},
+    6:  {"name": "Крепость Дракона",   "max_units": 8,  "income_bonus": 10,  "cost": 2099},
+    7:  {"name": "Твердыня",           "max_units": 9,  "income_bonus": 15,  "cost": 3778},
+    8:  {"name": "Легендарный Замок",  "max_units": 10, "income_bonus": 15,  "cost": 6800},
+    9:  {"name": "Небесная Цитадель",  "max_units": 12, "income_bonus": 20,  "cost": 12240},
+    10: {"name": "Вечная Твердыня",    "max_units": 15, "income_bonus": 25,  "cost": 22032},
+    11: {"name": "Алмазная Крепость",  "max_units": 16, "income_bonus": 30,  "cost": 40000},
+    12: {"name": "Эбонитовый Замок",   "max_units": 17, "income_bonus": 30,  "cost": 72000},
+    13: {"name": "Замок Грома",        "max_units": 18, "income_bonus": 35,  "cost": 130000},
+    14: {"name": "Обитель Гигантов",   "max_units": 19, "income_bonus": 35,  "cost": 234000},
+    15: {"name": "Замок Богов",        "max_units": 20, "income_bonus": 40,  "cost": 421000},
+    16: {"name": "Звёздная Твердыня",  "max_units": 21, "income_bonus": 40,  "cost": 758000},
+    17: {"name": "Крепость Вечности",  "max_units": 22, "income_bonus": 45,  "cost": 1364000},
+    18: {"name": "Вселенский Бастион", "max_units": 23, "income_bonus": 45,  "cost": 2455000},
+    19: {"name": "Замок Создателя",    "max_units": 24, "income_bonus": 50,  "cost": 4419000},
+    20: {"name": "Ультимативная Твердыня", "max_units": 25, "income_bonus": 50, "cost": 7954000},
 }
-MAX_CASTLE_LEVEL = 10
+MAX_CASTLE_LEVEL = 20
 
 # ── Данные оружия ──────────────────────────────────────────────────────────────
 WEAPON_BUY_COST = 100           # монеты за покупку базового оружия
@@ -67,7 +77,10 @@ EGG_DATA = {
     },
 }
 
-MAX_PETS = {1: 1, 2: 1, 3: 2, 4: 2, 5: 3, 6: 3, 7: 4, 8: 4, 9: 5, 10: 5}
+MAX_PETS = {
+    1: 1, 2: 1, 3: 2, 4: 2, 5: 3, 6: 3, 7: 4, 8: 4, 9: 5, 10: 5,
+    11: 6, 12: 6, 13: 7, 14: 7, 15: 8, 16: 8, 17: 9, 18: 9, 19: 10, 20: 10,
+}
 
 
 def now_utc() -> datetime:

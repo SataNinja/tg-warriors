@@ -49,6 +49,7 @@ class LeaderboardEntry(BaseModel):
     nickname: str | None
     coins: int
     total_power: int
+    win_streak: int = 0
 
 
 class BattleEntry(BaseModel):

@@ -82,6 +82,19 @@ export interface LeaderboardEntry {
   nickname: string | null
   coins: number
   total_power: number
+  win_streak: number
+}
+
+export interface ClanOut {
+  id: number
+  name: string
+  description: string | null
+  emblem: string
+  leader_id: number
+  total_power: number
+  wins: number
+  losses: number
+  members_count: number
 }
 
 // ── Магазин ──────────────────────────────────────────────────────────────────

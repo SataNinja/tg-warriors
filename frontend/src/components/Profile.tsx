@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { User } from '../types'
-import { setNickname } from '../api/client'
+import { User, PetOut } from '../types'
+import { setNickname, fetchPets } from '../api/client'
 
 interface Props {
   user: User
@@ -30,13 +30,28 @@ function fmtSecs(secs: number) {
 const CASTLE_EMOJIS: Record<number, string> = {
   1: '🏘', 2: '🏰', 3: '🏯', 4: '🗼', 5: '⚔️',
   6: '🐉', 7: '🛡', 8: '👑', 9: '🌟', 10: '💎',
+  11: '⚡', 12: '🌙', 13: '🔮', 14: '🌊', 15: '🦅',
+  16: '☄️', 17: '🌌', 18: '🪐', 19: '☀️', 20: '🌈',
 }
 
 export function Profile({ user, shieldActive, energy, maxEnergy, energyRegenSeconds, onRefresh }: Props) {
   const [editing, setEditing] = useState(false)
   const [newNick, setNewNick] = useState(user.nickname ?? '')
   const [loading, setLoading] = useState(false)
+  const [bestPet, setBestPet] = useState<PetOut | null>(null)
   const regenLeft = useCountdown(energyRegenSeconds)
+
+  useEffect(() => {
+    fetchPets()
+      .then((pets: PetOut[]) => {
+        if (!pets.length) return
+        const best = pets.reduce((a, b) =>
+          (a.effective_power_bonus + a.gold_bonus) >= (b.effective_power_bonus + b.gold_bonus) ? a : b
+        )
+        setBestPet(best)
+      })
+      .catch(() => {/* тихо */})
+  }, [])
 
   const displayName = user.nickname || user.first_name
   const energyPct = (energy / maxEnergy) * 100
@@ -103,6 +118,11 @@ export function Profile({ user, shieldActive, energy, maxEnergy, energyRegenSeco
           </span>
         )}
         <span style={styles.stat}>⚔️ Юнитов: {user.units.length}</span>
+        {bestPet && (
+          <span style={{ ...styles.stat, color: '#c084fc' }} title={`Сила: +${bestPet.effective_power_bonus} | Золото: +${bestPet.gold_bonus}%`}>
+            {bestPet.name} ⭐
+          </span>
+        )}
       </div>
 
       {/* Энергия с таймером */}

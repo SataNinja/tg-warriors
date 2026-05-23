@@ -68,8 +68,13 @@ export async function claimReferral() {
   return data
 }
 
-export async function fetchLeaderboard() {
-  const { data } = await api.get('/leaderboard')
+export async function fetchLeaderboard(sort: 'coins' | 'power' | 'wins' = 'coins') {
+  const { data } = await api.get('/leaderboard', { params: { sort } })
+  return data
+}
+
+export async function fetchClans() {
+  const { data } = await api.get('/clans')
   return data
 }
 

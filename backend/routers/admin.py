@@ -97,8 +97,8 @@ async def set_castle(
     db: AsyncSession = Depends(get_db),
 ):
     """Установить уровень замка игроку."""
-    if not 1 <= body.castle_level <= 10:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Уровень замка 1-10")
+    if not 1 <= body.castle_level <= 20:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Уровень замка 1-20")
     u = await _get_target(db, body.target_id)
     old = u.castle_level
     u.castle_level = body.castle_level

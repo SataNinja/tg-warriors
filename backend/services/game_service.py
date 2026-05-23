@@ -403,13 +403,31 @@ async def claim_referral_rewards(db: AsyncSession, user: User) -> ReferralClaimR
 
 
 # ── Лидерборд ─────────────────────────────────────────────────────────────────
-async def get_leaderboard(db: AsyncSession, limit: int = 50) -> list[dict]:
+async def get_leaderboard(db: AsyncSession, limit: int = 50, sort: str = "coins") -> list[dict]:
     from core.config import settings as _s
+
+    if sort == "wins":
+        order = User.win_streak.desc()
+    else:
+        order = User.coins.desc()   # "coins" и "power" — сначала берём по монетам, power сортируем в Python
+
     result = await db.execute(
-        select(User).where(User.id != _s.ADMIN_USER_ID).order_by(User.coins.desc()).limit(limit)
+        select(User).where(User.id != _s.ADMIN_USER_ID).order_by(order).limit(limit if sort != "power" else 200)
     )
     users = result.scalars().all()
-    return [{"rank": rank, "user_id": u.id, "username": u.username,
-             "first_name": u.first_name, "nickname": u.nickname,
-             "coins": u.coins, "total_power": _total_power(u.units)}
-            for rank, u in enumerate(users, 1)]
+
+    rows = [
+        {
+            "user_id": u.id, "username": u.username,
+            "first_name": u.first_name, "nickname": u.nickname,
+            "coins": u.coins, "total_power": _total_power(u.units),
+            "win_streak": u.win_streak,
+        }
+        for u in users
+    ]
+
+    if sort == "power":
+        rows.sort(key=lambda r: r["total_power"], reverse=True)
+        rows = rows[:limit]
+
+    return [{"rank": i + 1, **r} for i, r in enumerate(rows)]
