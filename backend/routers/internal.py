@@ -10,6 +10,7 @@ from core.config import settings
 from core.database import get_db
 from schemas.game import NotificationOut
 from services.notification_service import get_pending_notifications, mark_notification_sent
+from services.auth_service import create_access_token
 
 router = APIRouter(prefix="/internal", tags=["internal"])
 
@@ -48,3 +49,13 @@ async def mark_sent(notification_id: uuid.UUID, db: AsyncSession = Depends(get_d
     if not ok:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Notification not found")
     return {"ok": True}
+
+
+@router.get(
+    "/token/{user_id}",
+    dependencies=[Depends(verify_internal_token)]
+)
+async def get_user_token(user_id: int):
+    """Генерирует JWT-токен для указанного user_id (только для бота/внутреннего использования)."""
+    token = create_access_token(user_id)
+    return {"access_token": token}
