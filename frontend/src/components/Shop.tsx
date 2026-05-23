@@ -31,7 +31,10 @@ const RARITY_LABELS: Record<string, string> = {
 const CASTLE_EMOJIS: Record<number, string> = {
   1: '🏘', 2: '🏰', 3: '🏯', 4: '🗼', 5: '⚔️',
   6: '🐉', 7: '🛡', 8: '👑', 9: '🌟', 10: '💎',
+  11: '⚡', 12: '🌙', 13: '🔮', 14: '🌊', 15: '🦅',
+  16: '☄️', 17: '🌌', 18: '🪐', 19: '☀️', 20: '🌈',
 }
+const MAX_CASTLE_LEVEL = 20
 
 export function Shop({ onRefresh, userCoins, userIron }: Props) {
   const [tab, setTab] = useState<ShopTab>('castle')
@@ -88,7 +91,7 @@ function CastleTab({ onRefresh, userCoins }: { onRefresh: () => void; userCoins:
       <div style={styles.castleCard}>
         <div style={styles.castleEmoji}>{emoji}</div>
         <div style={styles.castleName}>{info.name}</div>
-        <div style={styles.castleLevel}>Уровень {info.level}/10</div>
+        <div style={styles.castleLevel}>Уровень {info.level}/{MAX_CASTLE_LEVEL}</div>
         <div style={styles.statRow}>
           <span>👥 Макс. юнитов: <b>{info.max_units}</b></span>
           <span>💰 Бонус: <b>+{info.income_bonus}%</b></span>
