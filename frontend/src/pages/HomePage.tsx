@@ -115,7 +115,6 @@ export function HomePage({ gameState, onRefresh }: Props) {
         {/* ── Рейд ── */}
         {tab === 'raid' && (
           <RaidPanel
-            cooldownRemaining={raid_cooldown_remaining}
             energy={energy}
             onRaidDone={onRefresh}
           />
