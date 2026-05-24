@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { User, PetOut } from '../types'
 import { setNickname, fetchPets } from '../api/client'
 
@@ -35,12 +36,8 @@ const CASTLE_EMOJIS: Record<number, string> = {
 }
 
 // ── Тултип-инфо ─────────────────────────────────────────────────────────────
-const TOOLTIP_W = 220
-const TOOLTIP_PAD = 10
-
 function InfoTooltip({ text, children }: { text: string; children: React.ReactNode }) {
   const [show, setShow] = useState(false)
-  // Координаты для position:fixed (вычисляются при открытии)
   const [coords, setCoords] = useState({ top: 0, left: 0, arrowLeft: '50%' })
   const ref = useRef<HTMLSpanElement>(null)
 
@@ -60,43 +57,42 @@ function InfoTooltip({ text, children }: { text: string; children: React.ReactNo
 
   const handleClick = () => {
     if (show) { setShow(false); return }
-
     if (ref.current) {
       const r = ref.current.getBoundingClientRect()
       const screenW = window.innerWidth
+      // Ширина тултипа — не шире экрана минус 24px отступы
+      const tw = Math.min(220, screenW - 24)
       const centerX = r.left + r.width / 2
 
-      // Левый край тултипа если центрировать по элементу
-      let left = centerX - TOOLTIP_W / 2
+      let left = centerX - tw / 2
+      if (left < 12) left = 12
+      if (left + tw > screenW - 12) left = screenW - 12 - tw
 
-      // Не выходить за границы экрана
-      if (left < TOOLTIP_PAD) left = TOOLTIP_PAD
-      if (left + TOOLTIP_W > screenW - TOOLTIP_PAD) left = screenW - TOOLTIP_PAD - TOOLTIP_W
+      // Стрелка указывает строго на элемент
+      const arrowPx = Math.max(10, Math.min(tw - 10, centerX - left))
 
-      // Стрелка указывает на исходный элемент
-      const arrowPx = Math.max(12, Math.min(TOOLTIP_W - 12, centerX - left))
-      const arrowLeft = `${arrowPx}px`
-
-      // Тултип появляется над элементом (8px зазор)
-      const top = r.top - 8
-
-      setCoords({ top, left, arrowLeft })
+      setCoords({ top: r.top - 6, left, arrowLeft: `${arrowPx}px` })
     }
     setShow(true)
   }
+
+  // ВАЖНО: createPortal рендерит прямо в document.body,
+  // поэтому position:fixed работает относительно viewport
+  // даже если родитель анимирован через CSS transform.
+  const tooltipW = typeof window !== 'undefined' ? Math.min(220, window.innerWidth - 24) : 220
 
   return (
     <span ref={ref} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
       <span onClick={handleClick} style={{ cursor: 'pointer', userSelect: 'none' }}>
         {children}
       </span>
-      {show && (
+      {show && createPortal(
         <span style={{
           position: 'fixed',
           top: coords.top,
           left: coords.left,
           transform: 'translateY(-100%)',
-          width: TOOLTIP_W,
+          width: tooltipW,
           background: 'rgba(15,15,25,0.97)',
           border: '1px solid rgba(255,255,255,0.15)',
           borderRadius: 10,
@@ -111,7 +107,6 @@ function InfoTooltip({ text, children }: { text: string; children: React.ReactNo
           pointerEvents: 'none',
         }}>
           {text}
-          {/* Стрелка вниз — над элементом */}
           <span style={{
             position: 'absolute',
             top: '100%',
@@ -122,7 +117,8 @@ function InfoTooltip({ text, children }: { text: string; children: React.ReactNo
             borderRight: '6px solid transparent',
             borderTop: '6px solid rgba(255,255,255,0.15)',
           }} />
-        </span>
+        </span>,
+        document.body
       )}
     </span>
   )

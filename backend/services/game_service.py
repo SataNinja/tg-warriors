@@ -270,10 +270,16 @@ async def do_raid(db: AsyncSession, attacker: User, target_id: int) -> RaidResul
     coins_stolen = 0
 
     if success:
-        # Базовая добыча
-        base_steal = max(1, min(int(defender.coins * settings.RAID_STEAL_PERCENT), defender.coins))
-        steal_amount = max(base_steal, random.randint(40, 70))
-        steal_amount = min(steal_amount, defender.coins)
+        # Защитник всегда оставляет себе минимум 50 монет
+        MIN_KEEP = 50
+        available = max(0, defender.coins - MIN_KEEP)
+
+        if available > 0:
+            base_steal = max(1, int(defender.coins * settings.RAID_STEAL_PERCENT))
+            steal_amount = max(base_steal, random.randint(40, 70))
+            steal_amount = min(steal_amount, available)  # не больше доступного
+        else:
+            steal_amount = 0  # у защитника слишком мало монет — ничего не крадём
 
         defender.coins -= steal_amount
         attacker.coins += steal_amount
@@ -293,14 +299,18 @@ async def do_raid(db: AsyncSession, attacker: User, target_id: int) -> RaidResul
         # Железо за PvP победу
         attacker.iron = getattr(attacker, 'iron', 0) + random.randint(2, 5)
 
-        db.add(Transaction(user_id=attacker.id, amount=steal_amount + streak_bonus, type="steal",
-                           description=f"Рейд на {_display_name(defender)}"))
-        db.add(Transaction(user_id=defender.id, amount=-steal_amount, type="lose",
-                           description=f"Рейд от {_display_name(attacker)}"))
+        if steal_amount > 0:
+            db.add(Transaction(user_id=attacker.id, amount=steal_amount + streak_bonus, type="steal",
+                               description=f"Рейд на {_display_name(defender)}"))
+            db.add(Transaction(user_id=defender.id, amount=-steal_amount, type="lose",
+                               description=f"Рейд от {_display_name(attacker)}"))
         streak_msg = f" 🔥 Серия {attacker.win_streak}! +{streak_bonus} бонус!" if streak_bonus else ""
-        await create_notification(db, defender.id,
-            f"⚔️ <b>{_display_name(attacker)}</b> совершил рейд и украл <b>{steal_amount}</b> монет!",
-            notif_type="raid_attack")
+        notif_msg = (
+            f"⚔️ <b>{_display_name(attacker)}</b> совершил рейд и украл <b>{steal_amount}</b> монет!"
+            if steal_amount > 0
+            else f"⚔️ <b>{_display_name(attacker)}</b> совершил рейд, но у тебя нечего красть — ты в безопасности!"
+        )
+        await create_notification(db, defender.id, notif_msg, notif_type="raid_attack")
     else:
         attacker.win_streak = 0
         streak_msg = ""
