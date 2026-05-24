@@ -313,39 +313,54 @@ function PetStackCard({
   }
 
   return (
-    <div style={{ ...styles.petCard, borderColor: rarityColor, padding: 0, overflow: 'hidden' }}>
+    <div style={{
+      ...styles.petCard,
+      borderColor: rarityColor,
+      padding: 0,
+      overflow: 'hidden',
+      background: expanded
+        ? 'rgba(255,255,255,0.06)'
+        : `linear-gradient(135deg, rgba(0,0,0,0.2) 0%, rgba(${rarityColor === '#a855f7' ? '168,85,247' : rarityColor === '#f59e0b' ? '245,158,11' : '59,130,246'},0.1) 100%)`,
+    }}>
       {/* Шапка стака */}
       <div
-        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', cursor: 'pointer' }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '12px 14px', cursor: 'pointer',
+          background: expanded ? `${rarityColor}18` : 'transparent',
+          transition: 'background 0.2s',
+        }}
         onClick={() => setExpanded(e => !e)}
       >
-        <span style={{ fontSize: 32 }}>{emoji}</span>
+        <span className={expanded ? 'anim-float' : ''} style={{ fontSize: 32 }}>{emoji}</span>
         <div style={{ flex: 1 }}>
           <div style={{ ...styles.petName, color: rarityColor }}>
             {first.name}
             <span style={{
               marginLeft: 6, background: rarityColor, color: '#fff',
-              borderRadius: 6, padding: '1px 7px', fontSize: 11, fontWeight: 800,
+              borderRadius: 6, padding: '1px 8px', fontSize: 11, fontWeight: 800,
             }}>×{pets.length}</span>
           </div>
           <div style={styles.petStats}>⚔️ +{totalPower} общая сила</div>
         </div>
-        <span style={{ fontSize: 12, opacity: 0.4 }}>{expanded ? '▲' : '▼'}</span>
+        <span style={{ fontSize: 16, color: rarityColor, opacity: 0.7 }}>{expanded ? '▲' : '▼'}</span>
       </div>
+
       {expanded && (
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          {pets.map(p => (
-            <PetCard
-              key={p.id}
-              pet={p}
-              userCoins={userCoins}
-              userCrystals={userCrystals}
-              foodList={foodList}
-              onBattle={onBattle}
-              onFeed={onFeed}
-              onRelease={onRelease}
-              onUpgrade={onUpgrade}
-            />
+        <div>
+          {pets.map((p, i) => (
+            <div key={p.id} style={{ borderTop: `1px solid ${rarityColor}25` }}>
+              <PetCard
+                pet={p}
+                userCoins={userCoins}
+                userCrystals={userCrystals}
+                foodList={foodList}
+                onBattle={onBattle}
+                onFeed={onFeed}
+                onRelease={onRelease}
+                onUpgrade={onUpgrade}
+              />
+            </div>
           ))}
         </div>
       )}
@@ -489,7 +504,8 @@ export function PetPanel({ onRefresh, userCoins, userCrystals }: Props) {
       )}
 
       <div style={styles.header}>
-        🐾 Питомцы
+        <span className="anim-float" style={{ display: 'inline-block', marginRight: 6 }}>🐾</span>
+        Питомцы
         <span style={styles.crystalBadge}>💎 {userCrystals}</span>
       </div>
 

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { GameState } from '../types'
+import { GameState, User } from '../types'
 import { Profile } from '../components/Profile'
 import { DailyReward } from '../components/DailyReward'
 import { UnitCard, UNIT_EMOJIS } from '../components/UnitCard'
@@ -9,6 +9,102 @@ import { Leaderboard } from '../components/Leaderboard'
 import { Shop } from '../components/Shop'
 import { PetPanel } from '../components/PetPanel'
 import { buyShield, claimPassiveIncome } from '../api/client'
+
+// ── Данные замков (дублируем из бэкенда) ────────────────────────────────────
+const CASTLE_NAMES: Record<number, string> = {
+  1: 'Деревня', 2: 'Городок', 3: 'Форпост', 4: 'Замок', 5: 'Бастион',
+  6: 'Крепость Дракона', 7: 'Твердыня', 8: 'Легендарный Замок',
+  9: 'Небесная Цитадель', 10: 'Вечная Твердыня', 11: 'Алмазная Крепость',
+  12: 'Эбонитовый Замок', 13: 'Арсенал Драконов', 14: 'Обитель Гигантов',
+  15: 'Замок Богов', 16: 'Звёздная Твердыня', 17: 'Крепость Вечности',
+  18: 'Вселенский Бастион', 19: 'Замок Создателя', 20: 'Ультимативная Твердыня',
+}
+const CASTLE_BONUS: Record<number, number> = {
+  1: 0, 2: 0, 3: 5, 4: 5, 5: 10, 6: 10, 7: 15, 8: 15, 9: 20, 10: 25,
+  11: 30, 12: 30, 13: 35, 14: 35, 15: 40, 16: 40, 17: 45, 18: 45, 19: 50, 20: 50,
+}
+const CASTLE_MAX_UNITS: Record<number, number> = {
+  1: 3, 2: 4, 3: 5, 4: 6, 5: 7, 6: 8, 7: 9, 8: 10, 9: 12, 10: 15,
+  11: 16, 12: 17, 13: 18, 14: 19, 15: 20, 16: 21, 17: 22, 18: 23, 19: 24, 20: 25,
+}
+const CASTLE_EMOJIS_MAIN: Record<number, string> = {
+  1: '🏘', 2: '🏰', 3: '🏯', 4: '🗼', 5: '⚔️',
+  6: '🐉', 7: '🛡', 8: '👑', 9: '🌟', 10: '💎',
+  11: '⚡', 12: '🌙', 13: '🔮', 14: '🌊', 15: '🦅',
+  16: '☄️', 17: '🌌', 18: '🪐', 19: '☀️', 20: '🌈',
+}
+const MAX_CASTLE_LVL = 20
+
+// ── Карточка замка на главном экране ────────────────────────────────────────
+function MainCastleCard({ user, onGoShop }: { user: User; onGoShop: () => void }) {
+  const lvl = user.castle_level
+  const emoji = CASTLE_EMOJIS_MAIN[lvl] ?? '🏰'
+  const name = CASTLE_NAMES[lvl] ?? `Замок ${lvl}`
+  const bonus = CASTLE_BONUS[lvl] ?? 0
+  const maxUnits = CASTLE_MAX_UNITS[lvl] ?? lvl * 2
+  const maxPets = Math.min(10, Math.ceil(lvl / 2))
+  const levelPct = (lvl / MAX_CASTLE_LVL) * 100
+  const castleGlow = lvl >= 15 ? '#f59e0b' : lvl >= 10 ? '#a855f7' : lvl >= 5 ? '#3b82f6' : '#6b7280'
+
+  return (
+    <div style={{
+      background: `linear-gradient(160deg, rgba(0,0,0,0.3) 0%, rgba(${lvl >= 10 ? '88,34,128' : '30,58,138'},0.25) 100%)`,
+      border: `1px solid ${castleGlow}40`,
+      boxShadow: `0 0 24px ${castleGlow}18`,
+      borderRadius: 16, padding: '16px 16px 14px', marginBottom: 12,
+    }}>
+      {/* Прогресс уровня */}
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.5, marginBottom: 4 }}>
+          <span>Уровень {lvl}</span>
+          <span>Макс {MAX_CASTLE_LVL}</span>
+        </div>
+        <div style={{ height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${levelPct}%`, background: `linear-gradient(90deg, ${castleGlow}, ${castleGlow}bb)`, borderRadius: 2 }} />
+        </div>
+      </div>
+
+      {/* Большое эмодзи */}
+      <div style={{ textAlign: 'center' }}>
+        <div className="anim-float" style={{ fontSize: 64, marginBottom: 4, filter: `drop-shadow(0 0 10px ${castleGlow}50)` }}>
+          {emoji}
+        </div>
+        <div style={{ fontWeight: 800, fontSize: 18, color: castleGlow, marginBottom: 2 }}>{name}</div>
+        <div style={{ fontSize: 12, opacity: 0.5, marginBottom: 12 }}>Уровень {lvl} из {MAX_CASTLE_LVL}</div>
+      </div>
+
+      {/* Статы */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 20 }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 20 }}>👥</div>
+          <div style={{ fontSize: 11, opacity: 0.6 }}>Юнитов</div>
+          <div style={{ fontWeight: 800, fontSize: 15 }}>{user.units.length}/{maxUnits}</div>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 20 }}>💰</div>
+          <div style={{ fontSize: 11, opacity: 0.6 }}>Бонус</div>
+          <div style={{ fontWeight: 800, fontSize: 15, color: '#4ade80' }}>{bonus > 0 ? `+${bonus}%` : '—'}</div>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 20 }}>🐾</div>
+          <div style={{ fontSize: 11, opacity: 0.6 }}>Питомцев</div>
+          <div style={{ fontWeight: 800, fontSize: 15 }}>{maxPets}</div>
+        </div>
+      </div>
+
+      {/* Ссылка на улучшение */}
+      <button onClick={onGoShop} style={{
+        display: 'block', width: '100%', marginTop: 12,
+        background: `rgba(${lvl >= 10 ? '168,85,247' : '59,130,246'},0.15)`,
+        border: `1px solid ${castleGlow}30`,
+        borderRadius: 10, padding: '7px 0', color: castleGlow,
+        cursor: 'pointer', fontSize: 12, fontWeight: 600,
+      }}>
+        🏪 Улучшить в Лавке
+      </button>
+    </div>
+  )
+}
 
 type Tab = 'main' | 'units' | 'raid' | 'shop' | 'pets' | 'leaderboard'
 
@@ -99,6 +195,8 @@ export function HomePage({ gameState, onRefresh }: Props) {
         {/* ── Главная ── */}
         {tab === 'main' && (
           <>
+            <MainCastleCard user={user} onGoShop={() => setTab('shop')} />
+
             <DailyReward
               canClaim={can_claim_daily}
               rewardCoins={daily_reward_coins}

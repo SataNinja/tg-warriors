@@ -196,7 +196,7 @@ function WeaponTab({ onRefresh, userCoins, userIron }: { onRefresh: () => void; 
       {info.level === 0 ? (
         // Оружия нет
         <div style={styles.upgradeCard}>
-          <div style={{ fontSize: 48, textAlign: 'center', margin: '8px 0' }}>⚔️</div>
+          <div className="anim-float" style={{ fontSize: 64, textAlign: 'center', margin: '8px 0', filter: 'drop-shadow(0 0 10px rgba(156,163,175,0.4))' }}>⚔️</div>
           <div style={styles.upgradeTitle}>Железный меч</div>
           <div style={styles.upgradeBonus}>+5 к силе армии</div>
           <div style={{ ...styles.upgradeCost, color: userCoins >= 100 ? '#4ade80' : '#f87171' }}>
@@ -210,7 +210,7 @@ function WeaponTab({ onRefresh, userCoins, userIron }: { onRefresh: () => void; 
         // Оружие есть
         <div>
           <div style={{ ...styles.castleCard, borderColor: rarityColor }}>
-            <div style={styles.castleEmoji}>⚔️</div>
+            <div className="anim-float" style={{ ...styles.castleEmoji, filter: `drop-shadow(0 0 12px ${rarityColor}60)` }}>⚔️</div>
             <div style={{ ...styles.castleName, color: rarityColor }}>{info.name}</div>
             <div style={{ fontSize: 12, color: rarityColor, marginBottom: 4 }}>
               {RARITY_LABELS[info.rarity ?? 'common']} · Уровень {info.level}/10
