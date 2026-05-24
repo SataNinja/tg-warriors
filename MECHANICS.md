@@ -1,77 +1,174 @@
-# TG Warriors — Быстрое восстановление контекста
+# TG Warriors — Полная документация проекта
 
-> Этот файл создан для быстрого погружения в проект. Читать при каждом новом сеансе работы.
+> **Читать при каждом новом сеансе.** Здесь собрано всё: архитектура, механики, что сделано, что предстоит, подводные камни.
 
 ---
 
-## Стек и архитектура
+## 1. Стек и архитектура
 
 | Слой | Технология |
 |------|-----------|
-| Bot | aiogram 3.7, aiohttp, python-dotenv |
-| Backend | FastAPI + SQLAlchemy (async) + PostgreSQL + Redis |
+| Bot | Python, aiogram 3.7, aiohttp, python-dotenv |
+| Backend | FastAPI + SQLAlchemy (async) + PostgreSQL + asyncpg |
 | Frontend | React + TypeScript + Vite (Telegram Mini App) |
 | Auth | Telegram initData → кастомный JWT (HS256, без сторонних библиотек) |
-| Deploy | GitHub → Railway (автодеплой по push) |
+| Deploy | GitHub → Railway (автодеплой по push в main) |
+| Cache | Redis (зарезервирован, активно не используется пока) |
 
-**Структура:**
+### Структура репозитория
+
 ```
 BOT_TG/
-├── bot/          — aiogram бот (start.py, notifications.py)
-├── backend/      — FastAPI (models, routers, services, schemas, core)
-└── frontend/     — React Mini App (App.tsx, pages/, components/, api/)
+├── bot/
+│   ├── main.py                    — запуск бота + фоновая задача уведомлений
+│   ├── handlers/
+│   │   ├── start.py               — /start, deep link реферальный
+│   │   ├── notifications.py       — poll_and_send_notifications (каждые 10 сек)
+│   │   └── admin.py               — /admin команды
+│   └── keyboards/inline.py        — клавиатура "Играть" + WebApp кнопка
+│
+├── backend/
+│   ├── main.py                    — FastAPI app, lifespan (миграции + notification_trigger_loop)
+│   ├── core/
+│   │   ├── config.py              — Settings (pydantic-settings, .env)
+│   │   ├── database.py            — AsyncSessionLocal, engine, Base
+│   │   └── security.py            — валидация Telegram initData (HMAC-SHA256)
+│   ├── models/                    — SQLAlchemy ORM модели
+│   ├── schemas/                   — Pydantic схемы (in/out)
+│   ├── routers/                   — FastAPI роутеры
+│   ├── services/
+│   │   ├── game_service.py        — ВСЯ игровая логика (рейды, энергия, daily, passive)
+│   │   ├── shop_service.py        — UNIT_TYPES, CASTLE_DATA, оружие, питомцы
+│   │   ├── pet_service.py         — бои питомцев, инкубация, кормёжка, upgrade
+│   │   ├── auth_service.py        — JWT, get_or_create_user
+│   │   ├── notification_service.py — create_notification, get_pending, mark_sent
+│   │   └── notification_triggers.py — НОВЫЙ: фоновый loop (каждые 5 мин) создаёт уведомления
+│   └── migrations/init.sql        — SQL создание таблиц (выполняется при старте backend)
+│
+└── frontend/
+    ├── index.html                 — CSS анимации (floatUp, pulse-glow, shimmer, fadeIn)
+    ├── src/
+    │   ├── App.tsx                — auth flow, загрузка gameState
+    │   ├── types/index.ts         — все TypeScript типы
+    │   ├── api/client.ts          — все HTTP-запросы к backend
+    │   ├── store/gameStore.ts     — Zustand: ongoingBattle (живёт при смене вкладок)
+    │   ├── pages/HomePage.tsx     — 6 вкладок + MainCastleCard компонент
+    │   └── components/
+    │       ├── Profile.tsx        — шапка с InfoTooltip (через createPortal)
+    │       ├── RaidPanel.tsx      — 3 режима боя, журнал, месть
+    │       ├── BattleAnimation.tsx — анимация PvP боя
+    │       ├── UnitCard.tsx       — стак юнитов одного типа + кнопка продажи
+    │       ├── UnitShop.tsx       — выбор типа юнита + scrollbar индикатор
+    │       ├── PetPanel.tsx       — питомцы, яйца, PetStackCard, прокачка
+    │       ├── Shop.tsx           — замок/оружие/питомцы в Лавке
+    │       └── DailyReward.tsx    — календарь 7 дней
 ```
 
 ---
 
-## Аутентификация
+## 2. Аутентификация
 
 1. Frontend берёт `window.Telegram.WebApp.initData`
-2. POST `/auth/telegram` → backend валидирует HMAC-SHA256 подпись
-3. Возвращает кастомный JWT (без `python-jose`, всё через `hmac` + `base64`)
-4. JWT хранится в `localStorage` (ключ `access_token`), передаётся как `Bearer`
+2. `POST /auth/telegram` → backend валидирует HMAC-SHA256 подпись Telegram
+3. Возвращает кастомный JWT (без `python-jose`, реализовано через `hmac` + `base64`)
+4. JWT хранится в `localStorage['access_token']`, передаётся как `Bearer` header
 5. `get_or_create_user()` — создаёт юзера при первом входе
 
----
+### Реферальная система
 
-## Модель пользователя (User)
-
-```
-id              = Telegram user_id (BigInteger, PK)
-coins           — основная валюта
-iron            — для прокачки оружия (стартует с 10)
-crystals        — премиум-ресурс
-energy          — макс 50, +1 каждые 6 мин (360 сек)
-castle_level    — уровень замка (1–20)
-win_streak      — серия побед (PvP + PvE общая)
-shield_until    — DateTime до которого активен щит
-last_daily_reward — DateTime последнего daily
-daily_streak    — счётчик дней подряд
-last_raid_at    — DateTime последнего рейда
-referrer_id     — кто пригласил
-```
+- Deep link формат: `t.me/BOT?start=ref_<user_id>`
+- Mini App URL формат: `t.me/BOT/app?startapp=ref_<user_id>`
+- **Важно**: `tg.initDataUnsafe.start_param` работает только для `t.me` ссылок.  
+  Для WebApp кнопок нужно читать из URL: `new URLSearchParams(window.location.search).get('startapp')`
+- App.tsx читает оба источника:
+  ```js
+  const startParam =
+    tg.initDataUnsafe?.start_param ||
+    new URLSearchParams(window.location.search).get('startapp') || ''
+  ```
+- Награда за реферала: **1000 монет** (REFERRAL_REWARD_COINS в config.py)
 
 ---
 
-## Энергия
+## 3. Модель данных
 
-- Рассчитывается на лету: `current = user.energy + int(elapsed_seconds // 360)`
-- При трате: пишем актуальное значение обратно в `user.energy`, обновляем `energy_updated_at`
+### Таблица `users`
+
+```
+id                BIGINT PK       — Telegram user_id
+username          VARCHAR(64)
+first_name        VARCHAR(128)
+last_name         VARCHAR(128)
+nickname          VARCHAR(32)     — первый раз бесплатно, потом 100 монет
+coins             BIGINT          — основная валюта (стартует с 100)
+iron              INTEGER         — ресурс для прокачки оружия (стартует с 10)
+crystals          INTEGER         — премиум-валюта (стартует с 0)
+energy            INTEGER         — макс 50, стартует с 50
+energy_updated_at TIMESTAMPTZ     — момент последней траты энергии
+castle_level      INTEGER         — уровень замка (1–20)
+win_streak        INTEGER         — серия побед (PvP + PvE общая)
+shield_until      TIMESTAMPTZ     — до которого активен щит
+last_daily_reward TIMESTAMPTZ     — последний daily
+daily_streak      INTEGER         — дней подряд daily
+last_raid_at      TIMESTAMPTZ     — последний рейд (кулдаун не используется)
+last_passive_at   TIMESTAMPTZ     — последнее получение пассивного дохода
+referrer_id       BIGINT          — кто пригласил
+```
+
+### Relationships (lazy="selectin" — загружаются автоматически с каждым User запросом)
+
+```python
+units:   list[Unit]     — армия игрока
+pets:    list[Pet]      — питомцы
+weapon:  Optional[Weapon]
+```
+
+### Таблица `notifications`
+
+```
+id        UUID PK
+user_id   BIGINT FK
+message   TEXT
+type      VARCHAR(32)    — "general" | "raid_attack" | "energy_full" | "daily_ready" | "passive_ready"
+is_sent   BOOLEAN
+created_at TIMESTAMPTZ
+```
+
+---
+
+## 4. Энергия
+
+- Рассчитывается на лету (не хранится актуальное значение):
+  ```python
+  current = user.energy + int(elapsed_seconds // 360)  # +1 каждые 6 минут
+  current = min(50, current)
+  ```
+- При трате: `user.energy = current - amount; user.energy_updated_at = now()`
 - Каждый рейд (PvP или PvE) стоит **5 энергии**
+- Максимум: **50**
 
 ---
 
-## Юниты (Warriors) — 20 типов
+## 5. Игровые константы (config.py)
 
-**Стакинг**: в UI юниты одного типа группируются в карточку-стак (UnitCard.tsx принимает `units: Unit[]`)
+```python
+UNIT_BUY_COST          = 50         # базовая цена юнита (множится на 1.12^count)
+UNIT_UPGRADE_COST_BASE = 30         # апгрейд = base * current_level монет
+SHIELD_COST            = 20         # монеты за щит
+SHIELD_DURATION_HOURS  = 8          # часов действия щита
+REFERRAL_REWARD_COINS  = 1000       # монеты рефереру за приглашённого
+STARTING_COINS         = 100        # монеты при регистрации
+RAID_STEAL_PERCENT     = 0.15       # 15% монет жертвы при рейде
+NICKNAME_CHANGE_COST   = 100        # монеты за смену ника (первый раз бесплатно)
+ADMIN_USER_ID          = 6320200740 # скрыт из лидерборда
+```
 
-**Покупка**: `price = UNIT_BUY_COST × 1.12^(кол-во уже купленных)` — цена растёт с каждым юнитом
+---
 
-**Лимит**: `castle_data[castle_level].max_units` (3 на старте, до 25 на макс уровне замка)
+## 6. Юниты — 20 типов
 
-**Прокачка**: `UNIT_UPGRADE_COST_BASE × current_level` монет → +5 power, +3 defense
+Открываются с ростом замка. Полный список в `shop_service.py → UNIT_TYPES`.
 
-**Все 20 типов** (в `backend/services/shop_service.py → UNIT_TYPES`):
 | Тип | Эмодзи | Замок | Power | Категория |
 |-----|--------|-------|-------|-----------|
 | warrior | ⚔️ | 1 | 10 | infantry |
@@ -95,244 +192,377 @@ referrer_id     — кто пригласил
 | void_walker | 🌌 | 19 | 42 | special |
 | god_warrior | ☀️ | 20 | 50 | divine |
 
+**Цена покупки**: `UNIT_BUY_COST × 1.12^(кол-во уже купленных)`  
+**Лимит**: `CASTLE_DATA[castle_level].max_units`  
+**Прокачка**: `UNIT_UPGRADE_COST_BASE × current_level` монет → +5 power, +3 defense  
+**Продажа**: `POST /unit/sell` → возврат ~50% от стоимости покупки  
+**Стакинг в UI**: юниты одного типа группируются в `UnitCard` (принимает `units: Unit[]`)
+
 ---
 
-## Боевая система
+## 7. Боевая система
 
-### Формула силы
+### Формула общей силы
+
 ```python
-total_power = sum(unit.power) + weapon.attack_bonus + sum(pet.power_bonus × pet_energy/20)
+total_power = (
+  sum(unit.power for unit in units)
+  + (weapon.attack_bonus if weapon else 0)
+  + sum(pet.power_bonus * (pet_energy / 20) for pet in pets)
+)
 ```
 
-### Модификаторы боя (`_apply_battle_modifiers` в game_service.py)
-1. **Замок**: +2% за каждый уровень замка выше противника (макс +20%) — только PvP
-2. **Голод питомцев**: если avg_hunger < 30% → -15% к силе
-3. **Matchup категорий**: матрица infantry/ranged/cavalry/magic/siege/divine/special
-   - infantry бьёт cavalry, ranged бьёт infantry, cavalry бьёт ranged
-   - magic бьёт cavalry, siege бьёт пехоту/лучников, divine бьёт магию
+### Модификаторы (применяются перед броском)
 
-### Бросок
-- `roll = power × random(0.60, 1.40)` — ±40% к силе каждой стороны (было ±25%)
-- Побеждает тот, у кого выше roll
+1. **Замок (только PvP)**: +2% за каждый уровень замка выше противника (макс +20%)
+2. **Голод питомцев**: если среднее `hunger < 30%` → -15% к total_power
+3. **Matchup категорий** (`_MATCHUP` в game_service.py):
+   - infantry → cavalry ×1.15; ranged → infantry ×1.15; cavalry → ranged ×1.15
+   - magic → cavalry ×1.20; siege → infantry/ranged ×1.10; divine → magic ×1.20
+
+### Бросок и победа
+
+```python
+attacker_roll = attacker_power * random.uniform(0.60, 1.40)  # ±40%
+defender_roll = defender_power * random.uniform(0.60, 1.40)
+winner = attacker if attacker_roll > defender_roll else defender
+```
 
 ---
 
-## PvP Рейды
+## 8. PvP Рейды (`/raid/pvp`)
 
 1. Проверки: не себя, энергия ≥ 5, цель без щита
-2. **Победа**: кража `max(base_steal, rand(40,70))` монет; +iron rand(2,5)
-3. **Серия**: каждые 3 победы → +50 монет; каждые 10 побед → +1 кристалл
-4. **Проигрыш**: win_streak = 0
-5. Защитнику — уведомление через notifications (бот доставляет за 10 сек)
-6. **Месть**: `can_revenge=True` в журнале боёв; ответная атака помечает `is_revenged=True`
-7. Результат содержит `opponent_name` (никнейм или first_name)
+2. Трата: 5 энергии у атакующего
+3. **Победа**:
+   - `available = max(0, defender.coins - 50)` — защитник всегда сохраняет **минимум 50 монет**
+   - `steal = min(max(base_15%, rand(40,70)), available)`
+   - defender.coins -= steal; attacker.coins += steal
+   - +iron rand(2,5) атакующему
+4. **Серия побед**: каждые 3 победы → +50 монет; каждые 10 побед → +1 кристалл
+5. **Проигрыш**: win_streak = 0
+6. Защитнику — уведомление типа `raid_attack` (бот доставляет за ≤10 сек)
+7. **Месть**: в журнале боёв `can_revenge=True`; ответная атака → `is_revenged=True`
 
-## Случайный матчмейкинг (`/raid/random`)
-- Ищет до 30 кандидатов: замок ±3, без щита, не сам себя
-- Фильтрует по силе ±30%
-- При неудаче — берёт любого из диапазона замка
-- Использует `lazy="selectin"` на User → units/pets/weapon грузятся автоматически
+### Матчмейкинг (`/raid/random`)
 
-## PvE Рейды
+- До 30 кандидатов: замок ±3, без щита, не сам, не бот-аккаунт
+- Фильтр силы ±30%; при неудаче — берёт любого в диапазоне замка
 
-- Бот-противник: `bot_power = attacker_power × random(0.7, 1.3)`
-- **Победа**: `base = rand(15, 25) × (1 + income_bonus_pct + pet_gold_bonus) / 100`
-- **Проигрыш**: -rand(5, 15) монет
-- Железо за победу: +random(3, 8)
+---
+
+## 9. PvE Рейды (`/raid/pve`)
+
+- Бот: `bot_power = attacker_power × random(0.7, 1.3)`
+- **Победа**: `coins = rand(15,25) × (1 + income_bonus% + pet_gold_bonus%) / 100`
+- **Проигрыш**: -rand(5,15) монет
+- Железо за победу: +rand(3,8)
 - Те же streak-бонусы
-- Логируется в `Raid` с `attacker_id == defender_id` (признак PvE)
+- PvE лог: `Raid` с `attacker_id == defender_id`
 
 ---
 
-## Замок (20 уровней)
+## 10. Замок (20 уровней)
 
-Полный массив в `shop_service.py → CASTLE_DATA`. Влияет на:
+Полные данные в `shop_service.py → CASTLE_DATA`:
+
+| Уровень | Название | Юниты | Бонус дохода | Стоимость |
+|---------|----------|-------|-------------|-----------|
+| 1 | Деревня | 3 | 0% | — |
+| 2 | Крепость | 4 | 0% | 200 |
+| 3 | Замок | 5 | 5% | 360 |
+| 4 | Цитадель | 6 | 5% | 648 |
+| 5 | Бастион | 7 | 10% | 1 166 |
+| 6 | Крепость Дракона | 8 | 10% | 2 099 |
+| 7 | Твердыня | 9 | 15% | 3 778 |
+| 8 | Легендарный Замок | 10 | 15% | 6 800 |
+| 9 | Небесная Цитадель | 12 | 20% | 12 240 |
+| 10 | Вечная Твердыня | 15 | 25% | 22 032 |
+| 11–20 | ... | 16–25 | 30–50% | 40k–7.9M |
+
+Замок влияет на:
 - Лимит юнитов (3 → 25)
-- Бонус дохода от PvE (0% → 50%)
+- Бонус дохода от PvE
 - Доступные типы юнитов
-- Лимит питомцев (1 → 10)
+- Лимит питомцев: `min(10, ceil(level / 2))`
+- Пассивный доход: `50 × (1 + income_bonus / 100)` монет каждые 5 часов
 
 ---
 
-## Щит
+## 11. Щит
 
-- Стоит `SHIELD_COST` монет
-- Активен `SHIELD_DURATION_HOURS` часов
+- Стоит 20 монет (SHIELD_COST)
+- Активен 8 часов (SHIELD_DURATION_HOURS)
 - Пока активен — PvP рейды на игрока заблокированы (403)
 
 ---
 
-## Ежедневная награда (Daily)
+## 12. Ежедневная награда
 
-- Цикл 7 дней: `[50, 75, 120, 200, 240, 300, 700]` монет (обновлено с оригинала)
-- Раз в 24 часа; если пропущено **>48 часов** — streak сбрасывается в 0
-- День 7 цикла (`streak % 7 == 0`) → дополнительно **+3 кристалла**
-- Фронтенд: `DailyReward.tsx` отображает ивентовый календарь 7 дней с подсветкой (✅/⭐/💎/серый)
-
----
-
-## Реферальная система
-
-- Deep link: `/start ref_<user_id>`
-- При регистрации: рефереру автоматически `REFERRAL_REWARD_COINS` монет
-- `Referral.reward_claimed = True` сразу
+- Цикл 7 дней: `[50, 75, 120, 200, 240, 300, 700]` монет
+- Доступна раз в 24 часа; если пропущено **>48 ч** → streak сбрасывается
+- День 7 цикла (`streak % 7 == 6`) → дополнительно **+3 кристалла**
+- Компонент: `DailyReward.tsx` — календарь с 7 слотами (✅/⭐/💎/серый)
 
 ---
 
-## Оружие
+## 13. Пассивный доход (каждые 5 часов)
 
-- **Покупка**: 100 монет → "Железный меч" (common, +5 attack)
-- **Прокачка**: `5 × current_level` железа → +3 attack_bonus
-- **Максимальный уровень**: 10
-- **Эволюция**: lvl4 common→rare, lvl7 rare→epic, lvl10 epic→legendary
-
----
-
-## Питомцы (30 видов)
-
-**3 типа яиц** (`EGG_DATA`):
-| Яйцо | Цена | Инкубация | Пул |
-|------|------|-----------|-----|
-| common 🥚 | 200 монет | 2 ч | 10 common питомцев |
-| rare 🔮 | 500 монет | 6 ч | 10 rare питомцев |
-| elite 💎 | 1200 монет | 12 ч | 10 epic/legendary питомцев |
-
-**Характеристики**:
-- `power_bonus` — прибавляется к total_power (пропорционально энергии: `bonus × energy/20`)
-- `gold_bonus` — % бонус к монетам от PvE победы
-- `energy`: макс 20, +1 каждые 10 мин (600 сек)
-- `hunger`: макс 100, -1 каждые 20 мин (1200 сек) = -3%/час → при avg < 30% штраф -15% к силе
-
-**Лимит**: `MAX_PETS[castle_level]` (1–10)
-
-**Еда**: базовая 30 монет (+30 голода), премиум 75 монет (полное восстановление)
-
-**Прокачка**: 5 💎 → +3 power_bonus, +1 gold_bonus, +1 level питомца
-
-**Стакинг**: TODO — одинаковые питомцы пока не стакаются (задача в очереди)
+- `PASSIVE_INCOME_BASE = 50` монет (умножается на castle income_bonus)
+- `claim_passive_income()` в `game_service.py`
+- Эндпоинты: `POST /daily/passive/claim`, `GET /daily/passive/status`
+- Статус передаётся через `GameStateOut`: `passive_income_ready`, `passive_income_amount`, `passive_income_next_in`
+- UI: карточка "💰 Доход замка" в главной вкладке
 
 ---
 
-## Кристаллы 💎
+## 14. Система уведомлений
 
-**Откуда берутся**:
-- Каждые 10 побед в серии (PvP/PvE) → +1 кристалл
+### Схема работы
+
+```
+Backend (старт) → notification_trigger_loop() (каждые 5 мин)
+  └── check_and_create_notifications() → пишет в таблицу notifications
+
+Bot (постоянно) → poll_and_send_notifications() (каждые 10 сек)
+  └── GET /internal/notifications/pending → send_message → POST .../sent
+```
+
+### Типы уведомлений и inline-кнопки
+
+| type | Сообщение | Кнопка бота |
+|------|-----------|-------------|
+| `raid_attack` | Тебя атаковали | 🗡 Отомстить (вкладка Бой) |
+| `energy_full` | Энергия заполнена | ⚡ В бой! (вкладка Бой) |
+| `daily_ready` | Ежедневная награда готова | 🎁 Забрать награду (вкладка Замок) |
+| `passive_ready` | Пассивный доход готов | 💰 Забрать доход (вкладка Замок) |
+| `general` | Любое другое | ⚔️ Играть |
+
+### Антиспам (notification_triggers.py)
+
+- `energy_full`: не чаще 1 раза в 6 часов
+- `daily_ready`: не чаще 1 раза в 24 часа
+- `passive_ready`: не чаще 1 раза в 5 часов
+- Проверка: `_has_recent_notification(db, user_id, type, since=now - interval)`
+
+### Защита эндпоинтов
+
+- Заголовок: `X-Internal-Token: SECRET_KEY`
+- Проверяется в `routers/internal.py → verify_internal_token`
+
+---
+
+## 15. Оружие
+
+- **Покупка**: 100 монет → "Железный меч" (common, +5 attack_bonus)
+- **Прокачка**: `5 × current_level` железа → +3 attack_bonus; макс уровень 10
+- **Эволюция редкости**: lvl4 → rare, lvl7 → epic, lvl10 → legendary
+- В БД: `UNIQUE` по `owner_id` — у каждого игрока одно оружие
+- Железо зарабатывается в боях (PvP: +rand(2,5), PvE: +rand(3,8))
+
+---
+
+## 16. Питомцы (30 видов)
+
+### Яйца
+
+| Тип | Цена | Инкубация | Пул питомцев |
+|-----|------|-----------|--------------|
+| common 🥚 | 200 монет | 2 ч | 10 common |
+| rare 🔮 | 500 монет | 6 ч | 10 rare |
+| elite 💎 | 1200 монет | 12 ч | 10 epic/legendary |
+
+### Характеристики питомца
+
+```
+power_bonus       — прибавляется к total_power (масштабируется: bonus × energy/20)
+gold_bonus        — % бонус к монетам от PvE победы
+energy            — макс 20, +1 каждые 10 мин (600 сек)
+hunger            — макс 100, -1 каждые 20 мин; если avg < 30% → -15% к силе
+rarity            — common/rare/epic/legendary (влияет на power_bonus и gold_bonus)
+```
+
+### Лимит питомцев
+
+`min(10, ceil(castle_level / 2))` — растёт с уровнем замка
+
+### Прокачка
+
+5 💎 → +3 power_bonus, +1 gold_bonus, +1 level питомца
+
+### Кристаллы 💎
+
+- 10 побед в серии → +1 кристалл
 - 7-й день daily → +3 кристалла
-- 10% шанс при победе в бою питомца → +1 кристалл
-- Покупка: 500 монет = 1 кристалл (до 10 за раз)
+- 10% шанс при победе питомца → +1 кристалл
+- Покупка: 500 монет = 1 кристалл
 
-**На что тратятся**:
-- Прокачка питомца: 5 💎 → POST `/pets/{id}/upgrade`
+### Стакинг в UI (PetStackCard)
 
----
-
-## Система уведомлений (бот → пользователь)
-
-1. Backend создаёт `Notification(is_sent=False)` в транзакции
-2. Бот каждые **10 секунд** делает `GET /internal/notifications/pending`
-3. Отправляет `bot.send_message`
-4. Помечает через `POST /internal/notifications/{id}/sent`
-5. Заголовок: `X-Internal-Token: SECRET_KEY`
-
-**TODO**: добавить inline-кнопку "Отомстить" в уведомление об атаке + уведомления о восстановлении энергии и daily
+Питомцы одного типа (`pet_type`) группируются:
+- Свёрнутый вид: шапка с эмодзи, именем, счётчиком ×N, суммарной силой, стрелкой ▼/▲
+- Раскрытый вид: каждый питомец — полная карточка с кнопками
+- Одиночные питомцы всегда показываются развёрнуто
 
 ---
 
-## Журнал боёв
+## 17. Фронтенд — детали реализации
 
-- Таблица `Raid`: `attacker_id`, `defender_id`, `attacker_power`, `defender_power`, `success`, `coins_stolen`, `is_revenged`
-- PvE: `attacker_id == defender_id`
-- `can_revenge = (не я атаковал) AND success AND NOT is_revenged`
+### CSS-анимации (index.html)
 
----
+```css
+.anim-float  — плавающее движение (4 сек, замок, оружие, питомцы)
+.anim-pulse  — пульсирующее свечение (кнопка daily/passive)
+.anim-fadein — появление снизу (0.25 сек)
+.anim-spin-slow — медленное вращение
+```
 
-## Лидерборд
+**Важно**: `position: fixed` внутри анимированного предка (`transform`) не работает как viewport-fixed (CSS containment). Тултипы рендерятся через `createPortal(tooltip, document.body)` в `Profile.tsx`.
 
-- Сортировка: `coins`, `wins`, `power`
-- Исключает `ADMIN_USER_ID`
+### Тултипы (InfoTooltip в Profile.tsx)
 
----
+- `createPortal` → рендер в `document.body` (обход CSS transform containment)
+- `getBoundingClientRect()` → вычисление координат при клике
+- `width = Math.min(220, window.innerWidth - 24)` — адаптируется к ширине экрана
+- Клик снаружи (touchstart + mousedown) закрывает тултип
 
-## Фронтенд — ключевые компоненты
+### Главная вкладка (tab='main')
 
-| Файл | Что делает |
-|------|------------|
-| `App.tsx` | auth flow, загрузка gameState |
-| `pages/HomePage.tsx` | главная страница, 6 вкладок (main/units/raid/shop/pets/leaderboard) |
-| `components/RaidPanel.tsx` | 3 режима боя (pve/random/pvp), журнал, месть |
-| `components/BattleAnimation.tsx` | анимация боя, восстанавливается после смены вкладки через gameStore |
-| `components/UnitCard.tsx` | стак юнитов одного типа (UNIT_EMOJIS экспортируется) |
-| `components/UnitShop.tsx` | выбор типа юнита с горизонтальным скроллом |
-| `components/PetPanel.tsx` | питомцы, яйца, бой питомцев, прокачка за кристаллы |
-| `components/DailyReward.tsx` | ивентовый календарь 7 дней |
-| `store/gameStore.ts` | Zustand: `ongoingBattle` (прогресс боя переживает смену вкладки) |
-| `api/client.ts` | все HTTP-запросы к backend |
+1. `MainCastleCard` — замок с анимацией, прогресс уровня, статы (нет API-запроса, данные из user)
+2. `DailyReward` — календарь 7 дней
+3. Карточка пассивного дохода — кнопка "Забрать" с таймером
+4. Кнопка щита (если щит не активен)
+5. Реферальная ссылка с копированием
 
----
+### Навигация
 
-## Файлы бэкенда — ключевые
-
-| Файл | Что там |
-|------|---------|
-| `backend/models/user.py` | Полная структура пользователя |
-| `backend/services/game_service.py` | **Вся игровая логика** (рейды, энергия, daily, рефералы, кристаллы) |
-| `backend/services/shop_service.py` | UNIT_TYPES, CASTLE_DATA, PET_TYPES, EGG_DATA, оружие |
-| `backend/services/pet_service.py` | покупка/инкубация/бой питомцев, upgrade_pet |
-| `backend/services/auth_service.py` | JWT, get_or_create_user |
-| `backend/core/security.py` | Валидация Telegram initData |
-| `backend/services/notification_service.py` | create_notification, get_pending |
-| `bot/handlers/notifications.py` | Фоновый поллинг (каждые 10 сек) |
-| `bot/handlers/start.py` | /start, deep link, реферальный код |
+6 вкладок с подписями: Замок / Войска / Бой / Лавка / Питомник / ТОП
 
 ---
 
-## Настройки (settings / .env)
+## 18. Деплой и окружение
 
-- `BOT_TOKEN`, `SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`
-- `STARTING_COINS`, `UNIT_BUY_COST`, `UNIT_UPGRADE_COST_BASE`
-- `RAID_STEAL_PERCENT`, `SHIELD_COST`, `SHIELD_DURATION_HOURS`
-- `REFERRAL_REWARD_COINS`, `ADMIN_USER_ID`, `MINI_APP_URL`
+### Railway
 
----
+- Проект: `happy-reflection` (рабочий)
+- Сервисы: `backend`, `frontend`, `bot`, `Postgres`, `Redis` — все Online
+- Автодеплой: push в GitHub → Railway пересобирает и деплоит
 
-## Деплой
+### Переменные окружения (.env)
 
-- **GitHub → Railway** автодеплой по push
-- Три сервиса: `backend` (FastAPI), `frontend` (Vite→nginx), `bot` (aiogram)
-- Migrации: вручную через Railway → Postgres → Data/Query (SQL вставить и выполнить)
-- PowerShell команды по одной: `git add .` → `git commit -m "..."` → `git push`
+```
+BOT_TOKEN=...
+SECRET_KEY=...
+DATABASE_URL=postgresql://...
+REDIS_URL=redis://...
+MINI_APP_URL=https://...         # URL Mini App (без слеша в конце)
+BACKEND_URL=http://backend:8000  # внутри Railway network
+VITE_BOT_USERNAME=...            # имя бота для реферальных ссылок
+VITE_API_URL=/api                # префикс API на фронте
+```
 
----
+### Git-команды для деплоя (PowerShell — по одной строке)
 
-## Задачи — актуальный статус
+```
+git add .
+git commit -m "описание"
+git push
+```
 
-| # | Задача | Статус |
-|---|--------|--------|
-| — | Исходный план задач 1–9 | ✅ выполнено |
-| — | Удаление/продажа юнитов (50% возврат) | ✅ `POST /unit/sell` + кнопка 💸 в UnitCard |
-| — | Стакинг питомцев | ✅ `PetStackCard` в PetPanel |
-| — | Ник в бою (`opponent_name`) | ✅ |
-| — | Визуальный скроллбар в UnitShop | ✅ CSS индикатор |
-| — | Уведомления бота с inline кнопками | ✅ raid_attack/energy/daily/passive типы |
-| — | Пассивный доход замка (каждые 5ч) | ✅ `POST /daily/passive/claim` |
-| — | Подписи под вкладками (Замок/Войска/Бой/...) | ✅ в HomePage.tsx |
-| — | Тултипы при нажатии в шапке | ✅ `InfoTooltip` компонент в Profile |
-| — | Визуал замка (большой, с анимацией) | ✅ Shop → CastleTab |
-| — | Fix рефералки (URL param + 1000 монет) | ✅ App.tsx + config.py |
-| — | Современный UI (градиент, анимации) | ✅ index.html CSS |
+### SQL-миграции (Railway → Postgres → Data → Query)
 
-## Миграции БД (выполнить в Railway → Postgres → Query)
+Все миграции применяются автоматически через `init.sql` при старте backend.  
+Для ручного применения на существующей БД:
 
 ```sql
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_passive_at TIMESTAMPTZ;
-ALTER TABLE notifications ADD COLUMN IF NOT EXISTS type VARCHAR(32) NOT NULL DEFAULT 'general';
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS type VARCHAR(32) DEFAULT 'general';
 ALTER TABLE units ADD COLUMN IF NOT EXISTS unit_type VARCHAR(32) NOT NULL DEFAULT 'warrior';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_streak INTEGER NOT NULL DEFAULT 0;
 ```
 
-## Следующие возможные задачи (в очереди)
+---
 
-- Реальные картинки вместо эмодзи (user принесёт ассеты)
-- Уведомления о полной энергии (scheduled task в боте)
-- Уведомление о готовом daily (scheduled task в боте)
-- PvP турниры / клановая система
-- Торговая площадка юнитов (market)
+## 19. Что сделано (полная история)
+
+| Фича | Статус | Файлы |
+|------|--------|-------|
+| Auth через Telegram initData | ✅ | core/security.py, routers/auth.py |
+| PvP и PvE рейды | ✅ | services/game_service.py |
+| Журнал боёв + месть | ✅ | routers/raid.py |
+| Замок 20 уровней | ✅ | shop_service.py |
+| Оружие (купить/прокачать) | ✅ | shop_service.py, routers/shop.py |
+| Питомцы (яйца, инкубация, бой, кормёжка) | ✅ | pet_service.py |
+| Прокачка питомцев за кристаллы | ✅ | pet_service.py |
+| Daily reward (7 дней, streak) | ✅ | game_service.py |
+| Пассивный доход замка (каждые 5 ч) | ✅ | game_service.py, routers/daily.py |
+| Продажа юнитов (50% возврат) | ✅ | routers/unit.py, UnitCard.tsx |
+| Стакинг юнитов в UI | ✅ | UnitCard.tsx |
+| Стакинг питомцев в UI | ✅ | PetPanel.tsx → PetStackCard |
+| Визуальный скроллбар в UnitShop | ✅ | UnitShop.tsx |
+| Реферальная система + fix URL param | ✅ | App.tsx (dual-source), config.py (1000 монет) |
+| Уведомления с inline-кнопками | ✅ | notifications.py, handlers/notifications.py |
+| Фоновые триггеры уведомлений | ✅ | services/notification_triggers.py, backend/main.py |
+| Бот отправляет уведомления (fix) | ✅ | bot/main.py (asyncio.create_task) |
+| Никнеймы (бесплатно/100 монет) | ✅ | routers/user.py |
+| Тултипы в шапке (InfoTooltip) | ✅ | Profile.tsx (createPortal) |
+| Замок на главном экране | ✅ | HomePage.tsx → MainCastleCard |
+| Визуал замка с анимацией в Лавке | ✅ | Shop.tsx → CastleTab |
+| Анимация float на оружии | ✅ | Shop.tsx → WeaponTab |
+| Анимация float на питомцах | ✅ | PetPanel.tsx (заголовок + стак) |
+| Подписи под вкладками | ✅ | HomePage.tsx |
+| Glassmorphism UI + CSS анимации | ✅ | index.html |
+| Защита монет при рейде (мин. 50) | ✅ | game_service.py (MIN_KEEP = 50) |
+| Клановая система (заготовка) | ✅ БД | migrations/init.sql (clans, clan_members, clan_wars) |
+
+---
+
+## 20. Что предстоит сделать
+
+### Высокий приоритет
+
+| Задача | Описание |
+|--------|----------|
+| **Замена эмодзи на изображения** | Пользователь принесёт PNG/WebP ассеты; нужно подключить в UnitCard, PetPanel, Shop |
+| **Клановая система (UI)** | Таблицы в БД уже есть (clans, clan_members, clan_wars); нужен роутер + компонент |
+| **PvP турниры** | Запланировано, детали не определены |
+
+### Средний приоритет
+
+| Задача | Описание |
+|--------|----------|
+| **Торговая площадка (market)** | Таблица market_listings в БД есть; нужен UI для продажи юнитов другим игрокам |
+| **Инвентарь с пагинацией** | При большом кол-ве юнитов/питомцев добавить навигацию страницами |
+| **Уведомление о вылуплении яйца** | Создавать уведомление когда яйцо готово |
+
+### Технический долг
+
+| Задача | Описание |
+|--------|----------|
+| **Redis кэш** | Подключён, но не используется; можно кэшировать лидерборд и castle info |
+| **TypeScript строгость** | Некоторые типы используют `any` |
+| **Тесты** | Нет ни одного теста |
+
+---
+
+## 21. Известные особенности и подводные камни
+
+### Backend
+
+1. **lazy="selectin"** на User → units/pets/weapon: загружаются автоматически. Если добавить новый relationship — указывать `lazy="selectin"` или `lazy="noload"` явно.
+2. **notification_trigger_loop** стартует через 30 сек после запуска backend (ждёт инициализацию БД).
+3. **init.sql** выполняется при каждом старте; все `ALTER TABLE` завёрнуты в `IF NOT EXISTS` — безопасно.
+4. **RAID_COOLDOWN_SECONDS** в config.py = 3600, но в логике **кулдаун отключён** (возвращает 0). Поле `last_raid_at` пишется, но не проверяется.
+
+### Frontend
+
+1. **`position: fixed` внутри `transform`-анимации** — не работает как viewport-fixed. Всегда использовать `createPortal(el, document.body)` для оверлеев/тултипов внутри анимированных компонентов.
+2. **`window.Telegram.WebApp.initData`** — пустая строка при тестировании вне Telegram. Добавить fallback или мок для разработки.
+3. **VITE_BOT_USERNAME** — должен быть без `@`. Пример: `my_game_first_bot`.
+4. **Два проекта на Railway**: `affectionate-charisma` (старый, можно удалить) и `happy-reflection` (рабочий).
+
+### Деплой
+
+1. PowerShell не поддерживает `&&` между командами — вводить по одной строке.
+2. Railway автодеплоит только при push в ветку `main` (или ту что настроена в проекте).
+3. После добавления новых колонок в модели — обязательно добавить `ALTER TABLE IF NOT EXISTS` в `init.sql`.

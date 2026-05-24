@@ -348,7 +348,7 @@ function PetStackCard({
 
       {expanded && (
         <div>
-          {pets.map((p, i) => (
+          {pets.map((p) => (
             <div key={p.id} style={{ borderTop: `1px solid ${rarityColor}25` }}>
               <PetCard
                 pet={p}
