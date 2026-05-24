@@ -8,7 +8,10 @@ from fastapi import HTTPException
 from models.user import User
 from routers.deps import get_current_user
 from schemas.user import UserOut, GameStateOut, NicknameRequest, NicknameResponse
-from services.game_service import now_utc, get_current_energy, energy_regen_eta, MAX_ENERGY, get_next_daily_reward
+from services.game_service import (
+    now_utc, get_current_energy, energy_regen_eta, MAX_ENERGY,
+    get_next_daily_reward, get_passive_income_ready, get_passive_income_next_in, get_passive_income_amount
+)
 
 router = APIRouter(tags=["user"])
 
@@ -50,7 +53,10 @@ async def get_state(current_user: User = Depends(get_current_user)):
         energy=current_energy,
         max_energy=MAX_ENERGY,
         energy_regen_seconds=regen_eta,
-        energy_regen_minutes=regen_eta // 60
+        energy_regen_minutes=regen_eta // 60,
+        passive_income_ready=get_passive_income_ready(current_user),
+        passive_income_amount=get_passive_income_amount(current_user),
+        passive_income_next_in=get_passive_income_next_in(current_user),
     )
 
 

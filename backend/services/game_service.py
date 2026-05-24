@@ -299,12 +299,14 @@ async def do_raid(db: AsyncSession, attacker: User, target_id: int) -> RaidResul
                            description=f"Рейд от {_display_name(attacker)}"))
         streak_msg = f" 🔥 Серия {attacker.win_streak}! +{streak_bonus} бонус!" if streak_bonus else ""
         await create_notification(db, defender.id,
-            f"⚔️ <b>{_display_name(attacker)}</b> совершил рейд и украл <b>{steal_amount}</b> монет!")
+            f"⚔️ <b>{_display_name(attacker)}</b> совершил рейд и украл <b>{steal_amount}</b> монет!",
+            notif_type="raid_attack")
     else:
         attacker.win_streak = 0
         streak_msg = ""
         await create_notification(db, defender.id,
-            f"🛡 <b>{_display_name(attacker)}</b> пытался атаковать, но провалился!")
+            f"🛡 <b>{_display_name(attacker)}</b> пытался атаковать, но провалился!",
+            notif_type="general")
 
     db.add(Raid(attacker_id=attacker.id, defender_id=defender.id,
                 attacker_power=attacker_power, defender_power=defender_power,
@@ -595,6 +597,86 @@ async def buy_crystals(db: AsyncSession, user: User, amount: int = 1) -> dict:
         "new_crystals": user.crystals,
         "new_coins": user.coins,
         "message": f"💎 Куплено {amount} кристалл(ов)! Потрачено {total_cost} монет."
+    }
+
+
+# ── Пассивный доход (каждые 5 часов) ─────────────────────────────────────────
+PASSIVE_INCOME_INTERVAL_HOURS = 5
+PASSIVE_INCOME_BASE = 50  # монет за 5 часов на замке Lv.1
+
+
+def get_passive_income_amount(user: User) -> int:
+    """Сколько монет доступно как пассивный доход."""
+    from services.shop_service import get_castle_income_bonus
+    bonus_pct = get_castle_income_bonus(user.castle_level)
+    return int(PASSIVE_INCOME_BASE * (1 + bonus_pct / 100))
+
+
+def get_passive_income_ready(user: User) -> bool:
+    """Можно ли забрать пассивный доход прямо сейчас."""
+    if user.last_passive_at is None:
+        return True
+    return now_utc() >= user.last_passive_at + timedelta(hours=PASSIVE_INCOME_INTERVAL_HOURS)
+
+
+def get_passive_income_next_in(user: User) -> int:
+    """Сколько секунд до следующего пассивного дохода."""
+    if user.last_passive_at is None:
+        return 0
+    elapsed = (now_utc() - user.last_passive_at).total_seconds()
+    remaining = PASSIVE_INCOME_INTERVAL_HOURS * 3600 - elapsed
+    return max(0, int(remaining))
+
+
+async def claim_passive_income(db: AsyncSession, user: User) -> dict:
+    """Забрать пассивный доход (раз в 5 часов)."""
+    if not get_passive_income_ready(user):
+        secs = get_passive_income_next_in(user)
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Доход ещё не готов. Следующее начисление через {secs // 3600}ч {(secs % 3600) // 60}м"
+        )
+    amount = get_passive_income_amount(user)
+    user.coins += amount
+    user.last_passive_at = now_utc()
+    db.add(Transaction(user_id=user.id, amount=amount, type="earn",
+                       description="Пассивный доход замка"))
+    await db.commit()
+    await db.refresh(user)
+    return {
+        "coins_earned": amount,
+        "new_balance": user.coins,
+        "message": f"💰 Пассивный доход: +{amount} монет!",
+        "next_in_seconds": PASSIVE_INCOME_INTERVAL_HOURS * 3600,
+    }
+
+
+# ── Удаление юнита ────────────────────────────────────────────────────────────
+UNIT_SELL_PERCENT = 0.5  # возврат 50% от стоимости
+
+
+async def delete_unit(db: AsyncSession, user: User, unit_id: str) -> dict:
+    """Продать/удалить юнита. Возвращает 50% от его стоимости."""
+    result = await db.execute(select(Unit).where(Unit.id == unit_id, Unit.owner_id == user.id))
+    unit = result.scalar_one_or_none()
+    if not unit:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Юнит не найден")
+
+    # Возврат монет: базовая цена × индекс × 50%
+    base_cost = settings.UNIT_BUY_COST
+    unit_index = len(user.units) - 1  # последний купленный — самый дорогой
+    refund = int(base_cost * (1.12 ** max(0, unit_index)) * UNIT_SELL_PERCENT)
+
+    user.coins += refund
+    db.add(Transaction(user_id=user.id, amount=refund, type="earn",
+                       description=f"Продажа юнита {unit.name}"))
+    await db.delete(unit)
+    await db.commit()
+    await db.refresh(user)
+    return {
+        "message": f"⚔️ {unit.name} продан за {refund} монет",
+        "refund": refund,
+        "new_balance": user.coins,
     }
 
 

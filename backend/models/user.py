@@ -28,6 +28,7 @@ class User(Base):
     last_raid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     referrer_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    last_passive_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Замок и прогрессия
     castle_level: Mapped[int] = mapped_column(Integer, default=1)

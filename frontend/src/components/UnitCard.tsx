@@ -1,5 +1,5 @@
 import { Unit } from '../types'
-import { upgradeUnit } from '../api/client'
+import { upgradeUnit, sellUnit } from '../api/client'
 import { useState } from 'react'
 
 // Эмодзи по типу юнита — расширится в Задаче 7
@@ -29,20 +29,35 @@ export const UNIT_EMOJIS: Record<string, string> = {
 const UNIT_UPGRADE_COST_BASE = 30
 
 // ── Карточка одного юнита (используется внутри стака) ─────────────────────────
-function SingleUnitCard({ unit, onUpgraded }: { unit: Unit; onUpgraded: () => void }) {
-  const [loading, setLoading] = useState(false)
+function SingleUnitCard({ unit, onUpgraded, onSold }: { unit: Unit; onUpgraded: () => void; onSold: () => void }) {
+  const [upgrading, setUpgrading] = useState(false)
+  const [selling, setSelling] = useState(false)
   const upgradeCost = UNIT_UPGRADE_COST_BASE * unit.level
   const emoji = UNIT_EMOJIS[unit.unit_type ?? 'warrior'] ?? '⚔️'
 
   const handleUpgrade = async () => {
-    setLoading(true)
+    setUpgrading(true)
     try {
       await upgradeUnit(unit.id)
       onUpgraded()
     } catch (e: any) {
       alert(e?.response?.data?.detail ?? 'Ошибка прокачки')
     } finally {
-      setLoading(false)
+      setUpgrading(false)
+    }
+  }
+
+  const handleSell = async () => {
+    if (!confirm(`Продать ${unit.name} Lv.${unit.level}? Получишь ~50% стоимости.`)) return
+    setSelling(true)
+    try {
+      const res = await sellUnit(unit.id)
+      alert(res.message)
+      onSold()
+    } catch (e: any) {
+      alert(e?.response?.data?.detail ?? 'Ошибка')
+    } finally {
+      setSelling(false)
     }
   }
 
@@ -53,8 +68,11 @@ function SingleUnitCard({ unit, onUpgraded }: { unit: Unit; onUpgraded: () => vo
         <span style={styles.level}>Lv.{unit.level}</span>
         <span style={styles.miniStats}> · 💥{unit.power} 🛡{unit.defense}</span>
       </div>
-      <button onClick={handleUpgrade} disabled={loading} style={styles.upgradeBtn}>
-        {loading ? '...' : `⬆️ ${upgradeCost}💰`}
+      <button onClick={handleUpgrade} disabled={upgrading || selling} style={styles.upgradeBtn}>
+        {upgrading ? '...' : `⬆️ ${upgradeCost}💰`}
+      </button>
+      <button onClick={handleSell} disabled={upgrading || selling} style={styles.sellBtn} title="Продать юнита">
+        {selling ? '...' : '💸'}
       </button>
     </div>
   )
@@ -64,9 +82,10 @@ function SingleUnitCard({ unit, onUpgraded }: { unit: Unit; onUpgraded: () => vo
 interface StackProps {
   units: Unit[]
   onUpgraded: () => void
+  onSold: () => void
 }
 
-export function UnitCard({ units, onUpgraded }: StackProps) {
+export function UnitCard({ units, onUpgraded, onSold }: StackProps) {
   const [expanded, setExpanded] = useState(false)
 
   const first = units[0]
@@ -100,7 +119,7 @@ export function UnitCard({ units, onUpgraded }: StackProps) {
         <div style={styles.list}>
           <div style={styles.listHint}>Нажми ⬆️ чтобы прокачать отдельного юнита:</div>
           {units.map(u => (
-            <SingleUnitCard key={u.id} unit={u} onUpgraded={onUpgraded} />
+            <SingleUnitCard key={u.id} unit={u} onUpgraded={onUpgraded} onSold={onSold} />
           ))}
         </div>
       )}
@@ -147,5 +166,10 @@ const styles: Record<string, React.CSSProperties> = {
     background: '#5865F2', border: 'none', borderRadius: 7,
     padding: '5px 9px', color: '#fff', cursor: 'pointer',
     fontSize: 12, fontWeight: 700, flexShrink: 0, whiteSpace: 'nowrap' as const,
+  },
+  sellBtn: {
+    background: 'rgba(248,113,113,0.15)', border: '1px solid rgba(248,113,113,0.3)',
+    borderRadius: 7, padding: '5px 7px', color: '#f87171', cursor: 'pointer',
+    fontSize: 13, flexShrink: 0,
   },
 }

@@ -140,6 +140,9 @@ ALTER TABLE raids ADD COLUMN IF NOT EXISTS is_revenged BOOLEAN NOT NULL DEFAULT 
 ALTER TABLE pets  ADD COLUMN IF NOT EXISTS hunger INTEGER NOT NULL DEFAULT 100;
 ALTER TABLE pets  ADD COLUMN IF NOT EXISTS hunger_updated_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_streak INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_passive_at TIMESTAMPTZ;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS type VARCHAR(32) NOT NULL DEFAULT 'general';
+ALTER TABLE units ADD COLUMN IF NOT EXISTS unit_type VARCHAR(32) NOT NULL DEFAULT 'warrior';
 
 -- ── Индексы ─────────────────────────────────────────────────────────────────
 CREATE INDEX IF NOT EXISTS idx_units_owner       ON units(owner_id);

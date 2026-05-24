@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
 
 from core.database import get_db
 from models.user import User
 from routers.deps import get_current_user
 from schemas.unit import UnitOut, BuyUnitRequest, UpgradeUnitRequest
-from services.game_service import buy_unit, upgrade_unit
+from services.game_service import buy_unit, upgrade_unit, delete_unit
 from services.shop_service import get_available_unit_types
 
 router = APIRouter(prefix="/unit", tags=["unit"])
@@ -38,3 +38,17 @@ async def upgrade_unit_route(
 ):
     """Прокачать существующего юнита."""
     return await upgrade_unit(db, current_user, body.unit_id)
+
+
+class DeleteUnitRequest(BaseModel):
+    unit_id: str
+
+
+@router.post("/sell")
+async def sell_unit_route(
+    body: DeleteUnitRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Продать юнита — возврат 50% стоимости."""
+    return await delete_unit(db, current_user, body.unit_id)

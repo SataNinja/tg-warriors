@@ -10,13 +10,61 @@
 
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
+
       body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        background: var(--tg-theme-bg-color, #1a1a2e);
+        background: #0f0f1a;
+        background-image:
+          radial-gradient(ellipse 80% 60% at 50% -10%, rgba(88,101,242,0.18) 0%, transparent 70%),
+          radial-gradient(ellipse 50% 40% at 90% 80%, rgba(139,92,246,0.1) 0%, transparent 60%),
+          radial-gradient(ellipse 40% 30% at 10% 60%, rgba(251,191,36,0.06) 0%, transparent 60%);
         color: var(--tg-theme-text-color, #ffffff);
         min-height: 100vh;
+        -webkit-tap-highlight-color: transparent;
       }
       #root { min-height: 100vh; }
+
+      /* ── Анимации ── */
+      @keyframes floatUp {
+        0%   { transform: translateY(0px); }
+        50%  { transform: translateY(-4px); }
+        100% { transform: translateY(0px); }
+      }
+      @keyframes pulse-glow {
+        0%   { box-shadow: 0 0 0 0 rgba(251,191,36,0.3); }
+        70%  { box-shadow: 0 0 0 8px rgba(251,191,36,0); }
+        100% { box-shadow: 0 0 0 0 rgba(251,191,36,0); }
+      }
+      @keyframes shimmer {
+        0%   { background-position: -200% center; }
+        100% { background-position: 200% center; }
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(6px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes spin-slow {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
+      }
+
+      /* Плавное появление */
+      .anim-fadein { animation: fadeIn 0.25s ease-out both; }
+
+      /* Пульс для кнопки daily/passive */
+      .anim-pulse { animation: pulse-glow 2s infinite; }
+
+      /* Плавающий эффект для замка */
+      .anim-float { animation: floatUp 4s ease-in-out infinite; }
+
+      /* Кнопки */
+      button { transition: opacity 0.15s, transform 0.1s; }
+      button:active:not(:disabled) { transform: scale(0.97); }
+
+      /* Скроллбар */
+      ::-webkit-scrollbar { width: 4px; height: 4px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
     </style>
   </head>
   <body>

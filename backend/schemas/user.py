@@ -43,6 +43,9 @@ class GameStateOut(BaseModel):
     max_energy: int
     energy_regen_seconds: int
     energy_regen_minutes: int
+    passive_income_ready: bool = False
+    passive_income_amount: int = 50
+    passive_income_next_in: int = 0
 
 
 class NicknameRequest(BaseModel):

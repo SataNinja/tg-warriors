@@ -180,3 +180,15 @@ export async function fetchFoodList() {
   const { data } = await api.get('/shop/food')
   return data
 }
+
+// ── Пассивный доход ───────────────────────────────────────────────────────────
+export async function claimPassiveIncome() {
+  const { data } = await api.post('/daily/passive/claim')
+  return data as { coins_earned: number; new_balance: number; message: string; next_in_seconds: number }
+}
+
+// ── Юниты: продажа ───────────────────────────────────────────────────────────
+export async function sellUnit(unitId: string) {
+  const { data } = await api.post('/unit/sell', { unit_id: unitId })
+  return data as { message: string; refund: number; new_balance: number }
+}

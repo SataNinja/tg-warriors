@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     SHIELD_COST: int = 20
     SHIELD_DURATION_HOURS: int = 8
     DAILY_REWARD_COINS: int = 50
-    REFERRAL_REWARD_COINS: int = 100
+    REFERRAL_REWARD_COINS: int = 1000
     STARTING_COINS: int = 100
     RAID_STEAL_PERCENT: float = 0.15      # 15% монет жертвы при успешном рейде
     ADMIN_USER_ID: int = 6320200740       # @SataNinjaKOT — скрыт из топа

@@ -15,8 +15,13 @@ from sqlalchemy import select
 from models.notification import Notification
 
 
-async def create_notification(db: AsyncSession, user_id: int, message: str) -> Notification:
-    notif = Notification(user_id=user_id, message=message)
+async def create_notification(
+    db: AsyncSession,
+    user_id: int,
+    message: str,
+    notif_type: str = "general"
+) -> Notification:
+    notif = Notification(user_id=user_id, message=message, type=notif_type)
     db.add(notif)
     # Не делаем commit здесь — вызывающий код сделает это сам
     return notif

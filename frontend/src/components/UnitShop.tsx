@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { fetchUnitTypes, buyUnit, UnitTypeInfo } from '../api/client'
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -32,6 +32,8 @@ export function UnitShop({ unitCount, userCoins, onBought }: Props) {
   const [loading, setLoading] = useState(true)
   const [buying, setBuying] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
+  const [scrollPct, setScrollPct] = useState(0)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   // Цена покупки следующего юнита (растёт 1.12^count, base=50)
   const nextPrice = Math.round(50 * (1.12 ** unitCount))
@@ -74,7 +76,15 @@ export function UnitShop({ unitCount, userCoins, onBought }: Props) {
       </div>
 
       {/* Горизонтальный скролл с карточками */}
-      <div style={styles.scrollRow}>
+      <div
+        ref={scrollRef}
+        style={styles.scrollRow}
+        onScroll={e => {
+          const el = e.currentTarget
+          const max = el.scrollWidth - el.clientWidth
+          setScrollPct(max > 0 ? el.scrollLeft / max : 0)
+        }}
+      >
         {types.map(t => (
           <button
             key={t.unit_type}
@@ -89,6 +99,17 @@ export function UnitShop({ unitCount, userCoins, onBought }: Props) {
           </button>
         ))}
       </div>
+
+      {/* Скроллбар-индикатор */}
+      {types.length > 4 && (
+        <div style={styles.scrollTrack}>
+          <div style={{
+            ...styles.scrollThumb,
+            width: `${Math.max(15, 100 / types.length * 4)}%`,
+            left: `${scrollPct * (100 - Math.max(15, 100 / types.length * 4))}%`,
+          }} />
+        </div>
+      )}
 
       {/* Детали выбранного */}
       {selectedType && (
@@ -185,5 +206,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
   buyBtnDisabled: {
     background: '#374151', cursor: 'not-allowed', opacity: 0.7,
+  },
+  scrollTrack: {
+    height: 3, background: 'rgba(255,255,255,0.08)', borderRadius: 2,
+    marginBottom: 10, position: 'relative' as const, overflow: 'hidden',
+  },
+  scrollThumb: {
+    position: 'absolute' as const, top: 0, height: '100%',
+    background: 'rgba(88,101,242,0.6)', borderRadius: 2,
+    transition: 'left 0.1s',
   },
 }

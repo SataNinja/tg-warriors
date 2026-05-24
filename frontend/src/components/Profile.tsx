@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { User, PetOut } from '../types'
 import { setNickname, fetchPets } from '../api/client'
 
@@ -32,6 +32,49 @@ const CASTLE_EMOJIS: Record<number, string> = {
   6: '🐉', 7: '🛡', 8: '👑', 9: '🌟', 10: '💎',
   11: '⚡', 12: '🌙', 13: '🔮', 14: '🌊', 15: '🦅',
   16: '☄️', 17: '🌌', 18: '🪐', 19: '☀️', 20: '🌈',
+}
+
+// ── Тултип-инфо ─────────────────────────────────────────────────────────────
+function InfoTooltip({ text, children }: { text: string; children: React.ReactNode }) {
+  const [show, setShow] = useState(false)
+  const ref = useRef<HTMLSpanElement>(null)
+
+  useEffect(() => {
+    if (!show) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setShow(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [show])
+
+  return (
+    <span ref={ref} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+      <span
+        onClick={() => setShow(s => !s)}
+        style={{ cursor: 'pointer', userSelect: 'none' }}
+      >
+        {children}
+      </span>
+      {show && (
+        <span style={{
+          position: 'absolute', bottom: '110%', left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(15,15,25,0.95)', border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 10, padding: '8px 12px', fontSize: 12, color: '#e2e8f0',
+          whiteSpace: 'pre-line', lineHeight: 1.5, zIndex: 99,
+          minWidth: 180, maxWidth: 240, boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+          backdropFilter: 'blur(8px)',
+        }}>
+          {text}
+          <span style={{
+            position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+            width: 0, height: 0, borderLeft: '6px solid transparent',
+            borderRight: '6px solid transparent', borderTop: '6px solid rgba(255,255,255,0.12)',
+          }} />
+        </span>
+      )}
+    </span>
+  )
 }
 
 export function Profile({ user, shieldActive, energy, maxEnergy, energyRegenSeconds, onRefresh }: Props) {
@@ -102,26 +145,45 @@ export function Profile({ user, shieldActive, energy, maxEnergy, energyRegenSeco
           <div style={styles.userId}>ID: {user.id}</div>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <div style={styles.coins}>💰 {user.coins.toLocaleString()}</div>
-          <div style={styles.iron}>🔩 {user.iron} {user.crystals > 0 && <span>· 💎 {user.crystals}</span>}</div>
+          <InfoTooltip text={"💰 Монеты\nОсновная валюта. Нанимай юнитов, покупай оружие и щит. Зарабатывай в боях и ежедневно."}>
+            <div style={styles.coins}>💰 {user.coins.toLocaleString()}</div>
+          </InfoTooltip>
+          <div style={styles.iron}>
+            <InfoTooltip text={"🔩 Железо\nРесурс для прокачки оружия. Добывается за победы в боях."}>
+              <span>🔩 {user.iron}</span>
+            </InfoTooltip>
+            {user.crystals >= 0 && (
+              <InfoTooltip text={"💎 Кристаллы\nПремиум-валюта. Прокачивай питомцев! Зарабатываются за серии побед, 7-й день daily и бой питомцев."}>
+                <span> · 💎 {user.crystals}</span>
+              </InfoTooltip>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Замок + серия побед */}
       <div style={styles.statsRow}>
-        <span style={styles.stat}>
-          {CASTLE_EMOJIS[user.castle_level] ?? '🏰'} Замок {user.castle_level}
-        </span>
+        <InfoTooltip text={`🏰 Замок уровня ${user.castle_level}\nОпределяет лимит юнитов и питомцев, бонус к доходу от боёв. Улучшай в 🏪 Лавка.`}>
+          <span style={styles.stat}>
+            {CASTLE_EMOJIS[user.castle_level] ?? '🏰'} Замок {user.castle_level}
+          </span>
+        </InfoTooltip>
         {user.win_streak >= 3 && (
-          <span style={{ ...styles.stat, color: '#f59e0b' }}>
-            🔥 Серия: {user.win_streak}
-          </span>
+          <InfoTooltip text={`🔥 Серия побед: ${user.win_streak}\nКаждые 3 победы — +50 монет\nКаждые 10 побед — +1 кристалл 💎`}>
+            <span style={{ ...styles.stat, color: '#f59e0b' }}>
+              🔥 Серия: {user.win_streak}
+            </span>
+          </InfoTooltip>
         )}
-        <span style={styles.stat}>⚔️ Юнитов: {user.units.length}</span>
+        <InfoTooltip text={`⚔️ ${user.units.length} юнит(ов)\nЮниты — твоя армия. Сила определяет исход боёв.\nПокупай в ⚔️ Войска.`}>
+          <span style={styles.stat}>⚔️ Юнитов: {user.units.length}</span>
+        </InfoTooltip>
         {bestPet && (
-          <span style={{ ...styles.stat, color: '#c084fc' }} title={`Сила: +${bestPet.effective_power_bonus} | Золото: +${bestPet.gold_bonus}%`}>
-            {bestPet.name} ⭐
-          </span>
+          <InfoTooltip text={`🐾 Лучший питомец: ${bestPet.name}\nСила: +${bestPet.effective_power_bonus}\nЗолото: +${bestPet.gold_bonus}%\nУправляй в 🐾 Питомник.`}>
+            <span style={{ ...styles.stat, color: '#c084fc' }}>
+              {bestPet.name} ⭐
+            </span>
+          </InfoTooltip>
         )}
       </div>
 

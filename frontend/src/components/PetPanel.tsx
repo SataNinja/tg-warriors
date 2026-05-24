@@ -278,6 +278,82 @@ function PetCard({
   )
 }
 
+// ── Стак одинаковых питомцев ─────────────────────────────────────────────────
+function PetStackCard({
+  pets, userCoins, userCrystals, foodList, onBattle, onFeed, onRelease, onUpgrade
+}: {
+  pets: PetOut[]
+  userCoins: number
+  userCrystals: number
+  foodList: FoodItem[]
+  onBattle: (id: number) => void
+  onFeed: (id: number, foodType: string) => void
+  onRelease: (id: number, name: string) => void
+  onUpgrade: (id: number) => void
+}) {
+  const [expanded, setExpanded] = useState(pets.length === 1)
+  const first = pets[0]
+  const emoji = PET_EMOJIS[first.pet_type] ?? '🐾'
+  const rarityColor = RARITY_COLORS[first.rarity] ?? '#9ca3af'
+  const totalPower = pets.reduce((s, p) => s + p.effective_power_bonus, 0)
+
+  if (pets.length === 1) {
+    return (
+      <PetCard
+        pet={first}
+        userCoins={userCoins}
+        userCrystals={userCrystals}
+        foodList={foodList}
+        onBattle={onBattle}
+        onFeed={onFeed}
+        onRelease={onRelease}
+        onUpgrade={onUpgrade}
+      />
+    )
+  }
+
+  return (
+    <div style={{ ...styles.petCard, borderColor: rarityColor, padding: 0, overflow: 'hidden' }}>
+      {/* Шапка стака */}
+      <div
+        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', cursor: 'pointer' }}
+        onClick={() => setExpanded(e => !e)}
+      >
+        <span style={{ fontSize: 32 }}>{emoji}</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ ...styles.petName, color: rarityColor }}>
+            {first.name}
+            <span style={{
+              marginLeft: 6, background: rarityColor, color: '#fff',
+              borderRadius: 6, padding: '1px 7px', fontSize: 11, fontWeight: 800,
+            }}>×{pets.length}</span>
+          </div>
+          <div style={styles.petStats}>⚔️ +{totalPower} общая сила</div>
+        </div>
+        <span style={{ fontSize: 12, opacity: 0.4 }}>{expanded ? '▲' : '▼'}</span>
+      </div>
+      {expanded && (
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          {pets.map(p => (
+            <PetCard
+              key={p.id}
+              pet={p}
+              userCoins={userCoins}
+              userCrystals={userCrystals}
+              foodList={foodList}
+              onBattle={onBattle}
+              onFeed={onFeed}
+              onRelease={onRelease}
+              onUpgrade={onUpgrade}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+
 // ── Основной компонент ────────────────────────────────────────────────────────
 export function PetPanel({ onRefresh, userCoins, userCrystals }: Props) {
   const [tab, setTab] = useState<PanelTab>('pets')
@@ -461,10 +537,18 @@ export function PetPanel({ onRefresh, userCoins, userCrystals }: Props) {
               Купи яйцо в 🏪 Магазин → Питомцы и вылупи его!
             </div>
           ) : (
-            pets.map(p => (
-              <PetCard
-                key={p.id}
-                pet={p}
+            // Стакинг: одинаковые питомцы показываются вместе
+            Object.values(
+              pets.reduce((acc, p) => {
+                const key = p.pet_type
+                if (!acc[key]) acc[key] = []
+                acc[key].push(p)
+                return acc
+              }, {} as Record<string, PetOut[]>)
+            ).map(group => (
+              <PetStackCard
+                key={group[0].pet_type}
+                pets={group}
                 userCoins={userCoins}
                 userCrystals={userCrystals}
                 foodList={foodList}

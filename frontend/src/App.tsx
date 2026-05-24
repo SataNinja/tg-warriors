@@ -44,7 +44,11 @@ function App() {
         const initData = tg.initData
 
         // Извлекаем реферальный код из start_param (ref_USERID)
-        const startParam = tg.initDataUnsafe?.start_param ?? ''
+        // start_param есть в initDataUnsafe (t.me ссылки) ИЛИ в URL ?startapp= (WebApp кнопки)
+        const startParam =
+          tg.initDataUnsafe?.start_param ||
+          new URLSearchParams(window.location.search).get('startapp') ||
+          ''
         let referrerId: number | undefined
         if (startParam.startsWith('ref_')) {
           const parsed = parseInt(startParam.slice(4))

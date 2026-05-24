@@ -73,4 +73,5 @@ class NotificationOut(BaseModel):
     id: str
     user_id: int
     message: str
+    type: str = "general"
     is_sent: bool

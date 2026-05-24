@@ -85,16 +85,52 @@ function CastleTab({ onRefresh, userCoins }: { onRefresh: () => void; userCoins:
   if (!info) return <div style={styles.loading}>Загрузка...</div>
 
   const emoji = CASTLE_EMOJIS[info.level] ?? '🏰'
+  const levelPct = (info.level / MAX_CASTLE_LEVEL) * 100
+
+  // Цвет темы замка по уровню
+  const castleGlow = info.level >= 15 ? '#f59e0b' : info.level >= 10 ? '#a855f7' : info.level >= 5 ? '#3b82f6' : '#6b7280'
 
   return (
     <div>
-      <div style={styles.castleCard}>
-        <div style={styles.castleEmoji}>{emoji}</div>
-        <div style={styles.castleName}>{info.name}</div>
-        <div style={styles.castleLevel}>Уровень {info.level}/{MAX_CASTLE_LEVEL}</div>
-        <div style={styles.statRow}>
-          <span>👥 Макс. юнитов: <b>{info.max_units}</b></span>
-          <span>💰 Бонус: <b>+{info.income_bonus}%</b></span>
+      {/* Большой визуал замка */}
+      <div style={{
+        ...styles.castleCard,
+        background: `linear-gradient(160deg, rgba(0,0,0,0.3) 0%, rgba(${info.level >= 10 ? '88,34,128' : '30,58,138'},0.25) 100%)`,
+        border: `1px solid ${castleGlow}40`,
+        boxShadow: `0 0 32px ${castleGlow}20`,
+        padding: '20px 16px 16px',
+      }}>
+        {/* Прогресс-бар уровня */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.5, marginBottom: 4 }}>
+            <span>Уровень {info.level}</span>
+            <span>Макс {MAX_CASTLE_LEVEL}</span>
+          </div>
+          <div style={{ height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${levelPct}%`, background: `linear-gradient(90deg, ${castleGlow}, ${castleGlow}bb)`, borderRadius: 2 }} />
+          </div>
+        </div>
+
+        <div className="anim-float" style={{ fontSize: 72, marginBottom: 4, filter: `drop-shadow(0 0 12px ${castleGlow}60)` }}>{emoji}</div>
+        <div style={{ ...styles.castleName, color: castleGlow, fontSize: 20 }}>{info.name}</div>
+        <div style={styles.castleLevel}>Уровень {info.level} из {MAX_CASTLE_LEVEL}</div>
+
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginTop: 10 }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 22 }}>👥</div>
+            <div style={{ fontSize: 11, opacity: 0.6 }}>Юнитов</div>
+            <div style={{ fontWeight: 800, fontSize: 16 }}>{info.max_units}</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 22 }}>💰</div>
+            <div style={{ fontSize: 11, opacity: 0.6 }}>Бонус</div>
+            <div style={{ fontWeight: 800, fontSize: 16, color: '#4ade80' }}>+{info.income_bonus}%</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 22 }}>🐾</div>
+            <div style={{ fontSize: 11, opacity: 0.6 }}>Питомцев</div>
+            <div style={{ fontWeight: 800, fontSize: 16 }}>{Math.min(10, Math.ceil(info.level / 2))}</div>
+          </div>
         </div>
       </div>
 

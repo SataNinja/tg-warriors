@@ -41,6 +41,9 @@ export interface GameState {
   max_energy: number
   energy_regen_seconds: number
   energy_regen_minutes: number
+  passive_income_ready: boolean
+  passive_income_amount: number
+  passive_income_next_in: number
 }
 
 export interface RaidResult {

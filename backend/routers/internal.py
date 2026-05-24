@@ -33,6 +33,7 @@ async def pending_notifications(db: AsyncSession = Depends(get_db)):
             id=str(n.id),
             user_id=n.user_id,
             message=n.message,
+            type=getattr(n, 'type', 'general'),
             is_sent=n.is_sent
         )
         for n in notifications
