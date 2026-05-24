@@ -30,6 +30,10 @@ async def main():
     dp.include_router(start_router)
     dp.include_router(notifications_router)
 
+    # Запускаем фоновую задачу отправки уведомлений
+    from handlers.notifications import poll_and_send_notifications
+    asyncio.create_task(poll_and_send_notifications(bot))
+
     logger.info("Bot started")
     await dp.start_polling(bot, drop_pending_updates=True)
 

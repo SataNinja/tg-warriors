@@ -60,7 +60,14 @@ async def run_migrations():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await run_migrations()
+    from services.notification_triggers import notification_trigger_loop
+    trigger_task = asyncio.create_task(notification_trigger_loop())
     yield
+    trigger_task.cancel()
+    try:
+        await trigger_task
+    except asyncio.CancelledError:
+        pass
 
 
 # docs_url=None, redoc_url=None — отключаем стандартные открытые маршруты

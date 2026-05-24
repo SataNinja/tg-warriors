@@ -35,41 +35,92 @@ const CASTLE_EMOJIS: Record<number, string> = {
 }
 
 // ── Тултип-инфо ─────────────────────────────────────────────────────────────
+const TOOLTIP_W = 220
+const TOOLTIP_PAD = 10
+
 function InfoTooltip({ text, children }: { text: string; children: React.ReactNode }) {
   const [show, setShow] = useState(false)
+  // Координаты для position:fixed (вычисляются при открытии)
+  const [coords, setCoords] = useState({ top: 0, left: 0, arrowLeft: '50%' })
   const ref = useRef<HTMLSpanElement>(null)
 
+  // Закрывать при клике/тапе снаружи
   useEffect(() => {
     if (!show) return
-    const handler = (e: MouseEvent) => {
+    const close = (e: MouseEvent | TouchEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setShow(false)
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    document.addEventListener('mousedown', close)
+    document.addEventListener('touchstart', close)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('touchstart', close)
+    }
   }, [show])
+
+  const handleClick = () => {
+    if (show) { setShow(false); return }
+
+    if (ref.current) {
+      const r = ref.current.getBoundingClientRect()
+      const screenW = window.innerWidth
+      const centerX = r.left + r.width / 2
+
+      // Левый край тултипа если центрировать по элементу
+      let left = centerX - TOOLTIP_W / 2
+
+      // Не выходить за границы экрана
+      if (left < TOOLTIP_PAD) left = TOOLTIP_PAD
+      if (left + TOOLTIP_W > screenW - TOOLTIP_PAD) left = screenW - TOOLTIP_PAD - TOOLTIP_W
+
+      // Стрелка указывает на исходный элемент
+      const arrowPx = Math.max(12, Math.min(TOOLTIP_W - 12, centerX - left))
+      const arrowLeft = `${arrowPx}px`
+
+      // Тултип появляется над элементом (8px зазор)
+      const top = r.top - 8
+
+      setCoords({ top, left, arrowLeft })
+    }
+    setShow(true)
+  }
 
   return (
     <span ref={ref} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-      <span
-        onClick={() => setShow(s => !s)}
-        style={{ cursor: 'pointer', userSelect: 'none' }}
-      >
+      <span onClick={handleClick} style={{ cursor: 'pointer', userSelect: 'none' }}>
         {children}
       </span>
       {show && (
         <span style={{
-          position: 'absolute', bottom: '110%', left: '50%', transform: 'translateX(-50%)',
-          background: 'rgba(15,15,25,0.95)', border: '1px solid rgba(255,255,255,0.12)',
-          borderRadius: 10, padding: '8px 12px', fontSize: 12, color: '#e2e8f0',
-          whiteSpace: 'pre-line', lineHeight: 1.5, zIndex: 99,
-          minWidth: 180, maxWidth: 240, boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
-          backdropFilter: 'blur(8px)',
+          position: 'fixed',
+          top: coords.top,
+          left: coords.left,
+          transform: 'translateY(-100%)',
+          width: TOOLTIP_W,
+          background: 'rgba(15,15,25,0.97)',
+          border: '1px solid rgba(255,255,255,0.15)',
+          borderRadius: 10,
+          padding: '8px 12px',
+          fontSize: 12,
+          color: '#e2e8f0',
+          whiteSpace: 'pre-line',
+          lineHeight: 1.6,
+          zIndex: 9999,
+          boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+          backdropFilter: 'blur(10px)',
+          pointerEvents: 'none',
         }}>
           {text}
+          {/* Стрелка вниз — над элементом */}
           <span style={{
-            position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
-            width: 0, height: 0, borderLeft: '6px solid transparent',
-            borderRight: '6px solid transparent', borderTop: '6px solid rgba(255,255,255,0.12)',
+            position: 'absolute',
+            top: '100%',
+            left: coords.arrowLeft,
+            transform: 'translateX(-50%)',
+            width: 0, height: 0,
+            borderLeft: '6px solid transparent',
+            borderRight: '6px solid transparent',
+            borderTop: '6px solid rgba(255,255,255,0.15)',
           }} />
         </span>
       )}
