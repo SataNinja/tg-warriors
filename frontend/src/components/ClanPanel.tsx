@@ -35,7 +35,6 @@ export function ClanPanel({ userId, userCoins, onRefresh }: Props) {
   const [myClan, setMyClan] = useState<ClanInfo | null | undefined>(undefined)
   const [clanList, setClanList] = useState<ClanListItem[]>([])
   const [warItems, setWarItems] = useState<WarItemInfo[]>([])
-  const [selectedClan, setSelectedClan] = useState<ClanInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
