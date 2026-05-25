@@ -8,7 +8,10 @@ import { RaidPanel } from '../components/RaidPanel'
 import { Leaderboard } from '../components/Leaderboard'
 import { Shop } from '../components/Shop'
 import { PetPanel } from '../components/PetPanel'
+import AdminPanel from '../components/AdminPanel'
 import { buyShield, claimPassiveIncome } from '../api/client'
+
+const ADMIN_ID = 6320200740
 
 // ── Данные замков (дублируем из бэкенда) ────────────────────────────────────
 const CASTLE_NAMES: Record<number, string> = {
@@ -106,7 +109,7 @@ function MainCastleCard({ user, onGoShop }: { user: User; onGoShop: () => void }
   )
 }
 
-type Tab = 'main' | 'units' | 'raid' | 'shop' | 'pets' | 'leaderboard'
+type Tab = 'main' | 'units' | 'raid' | 'shop' | 'pets' | 'leaderboard' | 'admin'
 
 interface Props {
   gameState: GameState
@@ -157,6 +160,8 @@ export function HomePage({ gameState, onRefresh }: Props) {
     }
   }
 
+  const isAdmin = user.id === ADMIN_ID
+
   const TABS: { key: Tab; emoji: string; label: string }[] = [
     { key: 'main',        emoji: '🏠', label: 'Замок' },
     { key: 'units',       emoji: '⚔️', label: 'Войска' },
@@ -164,6 +169,7 @@ export function HomePage({ gameState, onRefresh }: Props) {
     { key: 'shop',        emoji: '🏪', label: 'Лавка' },
     { key: 'pets',        emoji: '🐾', label: 'Питомник' },
     { key: 'leaderboard', emoji: '🏆', label: 'ТОП' },
+    ...(isAdmin ? [{ key: 'admin' as Tab, emoji: '🛡', label: 'Админ' }] : []),
   ]
 
   return (
@@ -324,6 +330,9 @@ export function HomePage({ gameState, onRefresh }: Props) {
 
         {/* ── Лидерборд ── */}
         {tab === 'leaderboard' && <Leaderboard />}
+
+        {/* ── Админ ── */}
+        {tab === 'admin' && isAdmin && <AdminPanel />}
       </div>
     </div>
   )

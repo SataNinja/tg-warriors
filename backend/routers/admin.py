@@ -3,14 +3,16 @@
 Доступ только через JWT администратора — обычные эндпоинты, но с проверкой admin_id.
 """
 from pydantic import BaseModel
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional, List
+from datetime import datetime, timezone, timedelta
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 
 from core.config import settings
 from core.database import get_db
 from models.user import User
+from models.pet import Pet
 from routers.deps import get_current_user
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -39,6 +41,24 @@ class SetCrystalsRequest(BaseModel):
     target_id: int
     crystals: int
 
+class SetShieldRequest(BaseModel):
+    target_id: int
+    hours: float  # 0 = снять щит, >0 = поставить на N часов
+
+class GivePetRequest(BaseModel):
+    target_id: int
+    pet_type: str   # wolf / raven / bear / phoenix
+    rarity: str     # common / rare / epic / legendary
+
+class PetInfoItem(BaseModel):
+    id: int
+    name: str
+    pet_type: str
+    rarity: str
+    level: int
+    power_bonus: int
+    gold_bonus: int
+
 class PlayerInfoResponse(BaseModel):
     id: int
     name: str
@@ -49,6 +69,14 @@ class PlayerInfoResponse(BaseModel):
     win_streak: int
     energy: int
     units_count: int
+    shield_until: Optional[str]   # ISO строка или null
+    pets: List[PetInfoItem]
+
+class PlayerListItem(BaseModel):
+    id: int
+    name: str
+    coins: int
+    castle_level: int
 
 
 async def _get_target(db: AsyncSession, target_id: int) -> User:
@@ -60,6 +88,41 @@ async def _get_target(db: AsyncSession, target_id: int) -> User:
 
 
 # ── Эндпоинты ────────────────────────────────────────────────────────────────
+
+@router.get("/players", response_model=List[PlayerListItem])
+async def search_players(
+    search: str = Query("", description="ID или часть имени"),
+    limit: int = Query(20, le=50),
+    _: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Поиск игроков по ID или нику."""
+    q = select(User).limit(limit)
+    if search.strip():
+        # Попробуем как числовой ID
+        if search.strip().isdigit():
+            q = q.where(User.id == int(search.strip()))
+        else:
+            pattern = f"%{search.strip()}%"
+            q = q.where(or_(
+                User.nickname.ilike(pattern),
+                User.first_name.ilike(pattern),
+            ))
+    else:
+        q = q.order_by(User.coins.desc())
+    result = await db.execute(q)
+    users = result.scalars().all()
+    return [
+        PlayerListItem(
+            id=u.id,
+            name=u.nickname or u.first_name,
+            coins=u.coins,
+            castle_level=u.castle_level,
+        )
+        for u in users
+    ]
+
+
 @router.get("/player/{target_id}", response_model=PlayerInfoResponse)
 async def get_player_info(
     target_id: int,
@@ -68,11 +131,23 @@ async def get_player_info(
 ):
     """Получить полную инфу об игроке."""
     u = await _get_target(db, target_id)
+    pets_result = await db.execute(select(Pet).where(Pet.owner_id == target_id))
+    pets = pets_result.scalars().all()
+    shield_str = u.shield_until.isoformat() if u.shield_until else None
     return PlayerInfoResponse(
         id=u.id, name=u.nickname or u.first_name,
         coins=u.coins, iron=u.iron, crystals=getattr(u, 'crystals', 0),
         castle_level=u.castle_level, win_streak=u.win_streak,
-        energy=u.energy, units_count=len(u.units)
+        energy=u.energy, units_count=len(u.units),
+        shield_until=shield_str,
+        pets=[
+            PetInfoItem(
+                id=p.id, name=p.name, pet_type=p.pet_type,
+                rarity=p.rarity, level=p.level,
+                power_bonus=p.power_bonus, gold_bonus=p.gold_bonus,
+            )
+            for p in pets
+        ],
     )
 
 
@@ -128,6 +203,74 @@ async def set_crystals(
     u.crystals = body.crystals
     await db.commit()
     return {"ok": True, "target": body.target_id, "crystals": body.crystals}
+
+
+@router.post("/set-shield")
+async def set_shield(
+    body: SetShieldRequest,
+    _: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Поставить или снять щит. hours=0 — снять."""
+    u = await _get_target(db, body.target_id)
+    if body.hours <= 0:
+        u.shield_until = None
+        msg = "Щит снят"
+    else:
+        u.shield_until = datetime.now(timezone.utc) + timedelta(hours=body.hours)
+        msg = f"Щит поставлен на {body.hours}ч"
+    await db.commit()
+    return {"ok": True, "target": body.target_id, "message": msg, "shield_until": u.shield_until}
+
+
+@router.post("/give-pet")
+async def give_pet(
+    body: GivePetRequest,
+    _: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Выдать питомца игроку."""
+    await _get_target(db, body.target_id)  # проверяем что игрок есть
+    valid_types = {"wolf", "raven", "bear", "phoenix"}
+    valid_rarities = {"common", "rare", "epic", "legendary"}
+    if body.pet_type not in valid_types:
+        raise HTTPException(400, f"Неверный тип питомца. Допустимы: {valid_types}")
+    if body.rarity not in valid_rarities:
+        raise HTTPException(400, f"Неверная редкость. Допустимы: {valid_rarities}")
+
+    PET_NAMES = {"wolf": "Волк", "raven": "Ворон", "bear": "Медведь", "phoenix": "Феникс"}
+    RARITY_BONUS = {"common": (0, 0), "rare": (5, 5), "epic": (10, 10), "legendary": (20, 15)}
+    power_b, gold_b = RARITY_BONUS[body.rarity]
+
+    pet = Pet(
+        owner_id=body.target_id,
+        name=PET_NAMES.get(body.pet_type, body.pet_type.capitalize()),
+        pet_type=body.pet_type,
+        rarity=body.rarity,
+        level=1,
+        power_bonus=power_b,
+        gold_bonus=gold_b,
+    )
+    db.add(pet)
+    await db.commit()
+    await db.refresh(pet)
+    return {"ok": True, "pet_id": pet.id, "target": body.target_id, "pet_type": body.pet_type, "rarity": body.rarity}
+
+
+@router.delete("/pet/{pet_id}")
+async def remove_pet(
+    pet_id: int,
+    _: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Удалить питомца по ID."""
+    result = await db.execute(select(Pet).where(Pet.id == pet_id))
+    pet = result.scalar_one_or_none()
+    if not pet:
+        raise HTTPException(404, f"Питомец {pet_id} не найден")
+    await db.delete(pet)
+    await db.commit()
+    return {"ok": True, "deleted_pet_id": pet_id}
 
 
 @router.post("/reset-cooldowns")

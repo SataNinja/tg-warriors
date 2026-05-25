@@ -181,6 +181,88 @@ export async function fetchFoodList() {
   return data
 }
 
+// ── Админ ─────────────────────────────────────────────────────────────────────
+export interface AdminPlayerListItem {
+  id: number
+  name: string
+  coins: number
+  castle_level: number
+}
+
+export interface AdminPetItem {
+  id: number
+  name: string
+  pet_type: string
+  rarity: string
+  level: number
+  power_bonus: number
+  gold_bonus: number
+}
+
+export interface AdminPlayerInfo {
+  id: number
+  name: string
+  coins: number
+  iron: number
+  crystals: number
+  castle_level: number
+  win_streak: number
+  energy: number
+  units_count: number
+  shield_until: string | null
+  pets: AdminPetItem[]
+}
+
+export async function adminSearchPlayers(search: string, limit = 20): Promise<AdminPlayerListItem[]> {
+  const { data } = await api.get('/admin/players', { params: { search, limit } })
+  return data
+}
+
+export async function adminGetPlayer(targetId: number): Promise<AdminPlayerInfo> {
+  const { data } = await api.get(`/admin/player/${targetId}`)
+  return data
+}
+
+export async function adminSetCoins(targetId: number, coins: number) {
+  const { data } = await api.post('/admin/set-coins', { target_id: targetId, coins })
+  return data
+}
+
+export async function adminSetIron(targetId: number, iron: number) {
+  const { data } = await api.post('/admin/set-iron', { target_id: targetId, iron })
+  return data
+}
+
+export async function adminSetCrystals(targetId: number, crystals: number) {
+  const { data } = await api.post('/admin/set-crystals', { target_id: targetId, crystals })
+  return data
+}
+
+export async function adminSetCastle(targetId: number, castleLevel: number) {
+  const { data } = await api.post('/admin/set-castle', { target_id: targetId, castle_level: castleLevel })
+  return data
+}
+
+export async function adminSetShield(targetId: number, hours: number) {
+  const { data } = await api.post('/admin/set-shield', { target_id: targetId, hours })
+  return data
+}
+
+export async function adminResetCooldowns(targetId: number) {
+  const { data } = await api.post(`/admin/reset-cooldowns/${targetId}`)
+  return data
+}
+
+export async function adminGivePet(targetId: number, petType: string, rarity: string) {
+  const { data } = await api.post('/admin/give-pet', { target_id: targetId, pet_type: petType, rarity })
+  return data
+}
+
+export async function adminRemovePet(petId: number) {
+  const { data } = await api.delete(`/admin/pet/${petId}`)
+  return data
+}
+
 // ── Пассивный доход ───────────────────────────────────────────────────────────
 export async function claimPassiveIncome() {
   const { data } = await api.post('/daily/passive/claim')
