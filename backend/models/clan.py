@@ -27,6 +27,14 @@ class Clan(Base):
     # Клановая война
     war_stage: Mapped[int] = mapped_column(Integer, default=0)   # 0=нет войны, 1-3=этап
 
+    # Казна и предметы войны
+    treasury: Mapped[int] = mapped_column(Integer, default=0)
+    war_buff_attack: Mapped[bool] = mapped_column(Boolean, default=False)
+    war_buff_defense: Mapped[bool] = mapped_column(Boolean, default=False)
+    war_buff_artifact: Mapped[bool] = mapped_column(Boolean, default=False)
+    war_buff_provisions: Mapped[bool] = mapped_column(Boolean, default=False)
+    max_members: Mapped[int] = mapped_column(Integer, default=10)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     members: Mapped[list["ClanMember"]] = relationship("ClanMember", back_populates="clan", lazy="selectin")

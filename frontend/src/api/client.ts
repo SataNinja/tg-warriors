@@ -263,6 +263,95 @@ export async function adminRemovePet(petId: number) {
   return data
 }
 
+// ── Кланы ────────────────────────────────────────────────────────────────────
+
+export interface ClanListItem {
+  id: number
+  name: string
+  emblem: string
+  members_count: number
+  total_power: number
+  wins: number
+}
+
+export interface ClanMemberInfo {
+  user_id: number
+  name: string
+  role: string
+  contribution: number
+}
+
+export interface ClanInfo {
+  id: number
+  name: string
+  description: string | null
+  emblem: string
+  leader_id: number
+  total_power: number
+  wins: number
+  losses: number
+  treasury: number
+  members_count: number
+  max_members: number
+  members: ClanMemberInfo[]
+  war_buff_attack: boolean
+  war_buff_defense: boolean
+  war_buff_artifact: boolean
+  war_buff_provisions: boolean
+}
+
+export interface WarItemInfo {
+  type: string
+  name: string
+  cost: number
+  desc: string
+}
+
+export async function fetchClanList(): Promise<ClanListItem[]> {
+  const { data } = await api.get('/clans')
+  return data
+}
+
+export async function fetchMyClan(): Promise<ClanInfo | null> {
+  const { data } = await api.get('/clans/my')
+  return data
+}
+
+export async function fetchClanById(clanId: number): Promise<ClanInfo> {
+  const { data } = await api.get(`/clans/${clanId}`)
+  return data
+}
+
+export async function createClan(name: string, description: string, emblem: string): Promise<ClanInfo> {
+  const { data } = await api.post('/clans/create', { name, description, emblem })
+  return data
+}
+
+export async function joinClan(clanId: number) {
+  const { data } = await api.post(`/clans/${clanId}/join`)
+  return data
+}
+
+export async function leaveClan() {
+  const { data } = await api.post('/clans/leave')
+  return data
+}
+
+export async function contributeToTreasury(amount: number) {
+  const { data } = await api.post('/clans/contribute', { amount })
+  return data
+}
+
+export async function buyWarItem(itemType: string) {
+  const { data } = await api.post('/clans/war/buy-item', { item_type: itemType })
+  return data
+}
+
+export async function fetchWarItems(): Promise<WarItemInfo[]> {
+  const { data } = await api.get('/clans/war/items')
+  return data
+}
+
 // ── Пассивный доход ───────────────────────────────────────────────────────────
 export async function claimPassiveIncome() {
   const { data } = await api.post('/daily/passive/claim')

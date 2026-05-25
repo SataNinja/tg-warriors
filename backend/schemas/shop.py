@@ -72,6 +72,9 @@ class PetOut(BaseModel):
     hunger: int                 # 0-100
     hunger_status: str          # "Сытый" / "Голодный" / "Умирает"
     hunger_deple_seconds: int   # секунд до следующего -1 голода
+    # Статистика боёв
+    wins: int = 0
+    losses: int = 0
 
     model_config = {"from_attributes": True}
 

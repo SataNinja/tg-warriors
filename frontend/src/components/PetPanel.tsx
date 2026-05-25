@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { PetOut, PetBattleResult, EggOut, FoodItem } from '../types'
-import { fetchPets, doPetBattle, releasePet, feedPet, fetchEggs, hatchEgg, fetchFoodList, upgradePet, buyCrystals } from '../api/client'
+import { fetchPets, doPetBattle, releasePet, feedPet, fetchEggs, hatchEgg, fetchFoodList, upgradePet } from '../api/client'
 
 interface Props {
   onRefresh: () => void
@@ -197,6 +197,9 @@ function PetCard({
             )}
             {pet.gold_bonus > 0 && <span> · 💰 +{pet.gold_bonus}% монет</span>}
           </div>
+          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+            Lv.{pet.level} · 🏆 {pet.wins ?? 0}П / 💀 {pet.losses ?? 0}П
+          </div>
         </div>
         <button
           onClick={() => onRelease(pet.id, pet.name)}
@@ -370,8 +373,22 @@ function PetStackCard({
 
 
 // ── Основной компонент ────────────────────────────────────────────────────────
+type SortMode = 'rarity' | 'energy' | 'wins'
+
+const RARITY_ORDER: Record<string, number> = { legendary: 0, epic: 1, rare: 2, common: 3 }
+
+function sortPets(pets: PetOut[], mode: SortMode): PetOut[] {
+  return [...pets].sort((a, b) => {
+    if (mode === 'rarity') return (RARITY_ORDER[a.rarity] ?? 4) - (RARITY_ORDER[b.rarity] ?? 4)
+    if (mode === 'energy') return b.energy - a.energy  // больше энергии = меньше устал
+    if (mode === 'wins') return (b.wins ?? 0) - (a.wins ?? 0)
+    return 0
+  })
+}
+
 export function PetPanel({ onRefresh, userCoins, userCrystals }: Props) {
   const [tab, setTab] = useState<PanelTab>('pets')
+  const [sortMode, setSortMode] = useState<SortMode>('rarity')
   const [pets, setPets] = useState<PetOut[]>([])
   const [eggs, setEggs] = useState<EggOut[]>([])
   const [foodList, setFoodList] = useState<FoodItem[]>([])
@@ -453,16 +470,6 @@ export function PetPanel({ onRefresh, userCoins, userCrystals }: Props) {
       onRefresh()
     } catch (e: any) {
       alert(e?.response?.data?.detail ?? 'Ошибка прокачки')
-    }
-  }
-
-  const handleBuyCrystals = async (amount: number) => {
-    try {
-      const res = await buyCrystals(amount)
-      alert(res.message)
-      onRefresh()
-    } catch (e: any) {
-      alert(e?.response?.data?.detail ?? 'Ошибка')
     }
   }
 
@@ -550,52 +557,51 @@ export function PetPanel({ onRefresh, userCoins, userCrystals }: Props) {
           {pets.length === 0 ? (
             <div style={styles.empty}>
               У тебя нет питомцев.<br />
-              Купи яйцо в 🏪 Магазин → Питомцы и вылупи его!
+              Купи яйцо в 🏪 Лавка → Питомцы и вылупи его!
             </div>
           ) : (
-            // Стакинг: одинаковые питомцы показываются вместе
-            Object.values(
-              pets.reduce((acc, p) => {
-                const key = p.pet_type
-                if (!acc[key]) acc[key] = []
-                acc[key].push(p)
-                return acc
-              }, {} as Record<string, PetOut[]>)
-            ).map(group => (
-              <PetStackCard
-                key={group[0].pet_type}
-                pets={group}
-                userCoins={userCoins}
-                userCrystals={userCrystals}
-                foodList={foodList}
-                onBattle={battling ? () => {} : handleBattle}
-                onFeed={handleFeed}
-                onRelease={(id, name) => setReleaseConfirm({ id, name })}
-                onUpgrade={handleUpgrade}
-              />
-            ))
+            <>
+              {/* Сортировка */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: '#6b7280' }}>Сорт.:</span>
+                {(['rarity', 'energy', 'wins'] as SortMode[]).map(m => (
+                  <button key={m} onClick={() => setSortMode(m)}
+                    style={{
+                      background: sortMode === m ? 'rgba(88,101,242,0.4)' : 'rgba(255,255,255,0.06)',
+                      border: `1px solid ${sortMode === m ? 'rgba(129,140,248,0.5)' : 'rgba(255,255,255,0.08)'}`,
+                      borderRadius: 8, color: '#fff', padding: '3px 10px', fontSize: 11, cursor: 'pointer'
+                    }}>
+                    {m === 'rarity' ? '💎 Редкость' : m === 'energy' ? '⚡ Энергия' : '🏆 Победы'}
+                  </button>
+                ))}
+              </div>
+              {/* Стакинг: одинаковые питомцы показываются вместе */}
+              {Object.values(
+                sortPets(pets, sortMode).reduce((acc, p) => {
+                  const key = p.pet_type
+                  if (!acc[key]) acc[key] = []
+                  acc[key].push(p)
+                  return acc
+                }, {} as Record<string, PetOut[]>)
+              ).map(group => (
+                <PetStackCard
+                  key={group[0].pet_type}
+                  pets={group}
+                  userCoins={userCoins}
+                  userCrystals={userCrystals}
+                  foodList={foodList}
+                  onBattle={battling ? () => {} : handleBattle}
+                  onFeed={handleFeed}
+                  onRelease={(id, name) => setReleaseConfirm({ id, name })}
+                  onUpgrade={handleUpgrade}
+                />
+              ))}
+            </>
           )}
           <div style={styles.hint}>
             Победа в бою питомца = +1–20 ⚡ тебе · 10% шанс 💎 кристалл.<br />
-            Голод 0% = питомец не даёт бонус к силе.
-          </div>
-          {/* Покупка кристаллов */}
-          <div style={styles.crystalShop}>
-            <div style={styles.crystalShopTitle}>💎 Кристаллы</div>
-            <div style={styles.crystalShopHint}>500 💰 = 1 💎. Используй для прокачки питомцев.</div>
-            <div style={styles.crystalBuyRow}>
-              {[1, 3, 5].map(n => (
-                <button
-                  key={n}
-                  onClick={() => handleBuyCrystals(n)}
-                  disabled={userCoins < 500 * n}
-                  style={{ ...styles.crystalBuyBtn, opacity: userCoins < 500 * n ? 0.4 : 1 }}
-                >
-                  +{n} 💎<br />
-                  <span style={{ fontSize: 11, opacity: 0.7 }}>{500 * n}💰</span>
-                </button>
-              ))}
-            </div>
+            Голод 0% = питомец не даёт бонус к силе.<br />
+            Кристаллы можно купить в 🏪 Лавка → Кристаллы.
           </div>
         </>
       )}
@@ -605,7 +611,7 @@ export function PetPanel({ onRefresh, userCoins, userCrystals }: Props) {
         <>
           {eggs.length === 0 ? (
             <div style={styles.empty}>
-              Нет яиц. Купи в 🏪 Магазин → Питомцы!
+              Нет яиц. Купи в 🏪 Лавка → Питомцы!
             </div>
           ) : (
             eggs.map(egg => (
@@ -684,18 +690,6 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%', background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.3)',
     borderRadius: 8, padding: '6px 0', color: '#a78bfa', cursor: 'pointer',
     fontWeight: 600, fontSize: 12, marginBottom: 6,
-  },
-  crystalShop: {
-    background: 'rgba(167,139,250,0.08)', borderRadius: 12,
-    padding: '12px 14px', marginTop: 12, border: '1px solid rgba(167,139,250,0.2)',
-  },
-  crystalShopTitle: { fontWeight: 700, fontSize: 14, marginBottom: 4, color: '#a78bfa' },
-  crystalShopHint: { fontSize: 11, opacity: 0.6, marginBottom: 10 },
-  crystalBuyRow: { display: 'flex', gap: 8 },
-  crystalBuyBtn: {
-    flex: 1, background: 'rgba(167,139,250,0.2)', border: '1px solid rgba(167,139,250,0.3)',
-    borderRadius: 10, padding: '8px 0', color: '#fff', cursor: 'pointer',
-    fontWeight: 700, fontSize: 14, textAlign: 'center' as const, lineHeight: 1.6,
   },
   confirmOverlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',

@@ -225,9 +225,35 @@ async def upgrade_unit(db: AsyncSession, user: User, unit_id) -> Unit:
 
 
 # ── PvP рейд ─────────────────────────────────────────────────────────────────
+
+MAX_DAILY_RAIDS_PER_TARGET = 4  # максимум боёв против одного игрока за сутки
+
+
+async def _count_daily_raids_on_target(db: AsyncSession, attacker_id: int, target_id: int) -> int:
+    """Сколько раз attacker атаковал target сегодня (с начала UTC-суток)."""
+    day_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    result = await db.execute(
+        select(func.count(Raid.id)).where(
+            Raid.attacker_id == attacker_id,
+            Raid.defender_id == target_id,
+            Raid.created_at >= day_start,
+        )
+    )
+    return result.scalar_one() or 0
+
+
 async def do_raid(db: AsyncSession, attacker: User, target_id: int) -> RaidResult:
     if attacker.id == target_id:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Нельзя атаковать себя")
+
+    # Проверяем дневной лимит рейдов на одного игрока
+    daily_count = await _count_daily_raids_on_target(db, attacker.id, target_id)
+    if daily_count >= MAX_DAILY_RAIDS_PER_TARGET:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            f"Сегодня ты уже атаковал этого игрока {MAX_DAILY_RAIDS_PER_TARGET} раза. "
+            f"Приходи завтра или выбери другую цель!"
+        )
 
     await _spend_energy(db, attacker)
 

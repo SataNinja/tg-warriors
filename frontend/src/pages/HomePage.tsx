@@ -9,6 +9,7 @@ import { Leaderboard } from '../components/Leaderboard'
 import { Shop } from '../components/Shop'
 import { PetPanel } from '../components/PetPanel'
 import AdminPanel from '../components/AdminPanel'
+import { ClanPanel } from '../components/ClanPanel'
 import { buyShield, claimPassiveIncome } from '../api/client'
 
 const ADMIN_ID = 6320200740
@@ -109,7 +110,7 @@ function MainCastleCard({ user, onGoShop }: { user: User; onGoShop: () => void }
   )
 }
 
-type Tab = 'main' | 'units' | 'raid' | 'shop' | 'pets' | 'leaderboard' | 'admin'
+type Tab = 'main' | 'units' | 'raid' | 'shop' | 'pets' | 'leaderboard' | 'clan' | 'admin'
 
 interface Props {
   gameState: GameState
@@ -169,6 +170,7 @@ export function HomePage({ gameState, onRefresh }: Props) {
     { key: 'shop',        emoji: '🏪', label: 'Лавка' },
     { key: 'pets',        emoji: '🐾', label: 'Питомник' },
     { key: 'leaderboard', emoji: '🏆', label: 'ТОП' },
+    { key: 'clan',        emoji: '⚔️', label: 'Кланы' },
     ...(isAdmin ? [{ key: 'admin' as Tab, emoji: '🛡', label: 'Админ' }] : []),
   ]
 
@@ -203,13 +205,15 @@ export function HomePage({ gameState, onRefresh }: Props) {
           <>
             <MainCastleCard user={user} onGoShop={() => setTab('shop')} />
 
-            <DailyReward
-              canClaim={can_claim_daily}
-              rewardCoins={daily_reward_coins}
-              dailyNextAt={daily_next_at}
-              streak={daily_streak}
-              onClaimed={onRefresh}
-            />
+            {/* Щит — сразу под замком */}
+            {!shield_active && (
+              <div style={styles.actions}>
+                <button onClick={handleBuyShield} disabled={shieldLoading}
+                  style={{ ...styles.actionBtn, background: 'rgba(29,78,216,0.4)', borderColor: 'rgba(99,102,241,0.4)' }}>
+                  {shieldLoading ? '...' : `🛡 Купить щит (20 💰 · 8 ч)`}
+                </button>
+              </div>
+            )}
 
             {/* Пассивный доход */}
             <div style={{
@@ -238,14 +242,14 @@ export function HomePage({ gameState, onRefresh }: Props) {
               </button>
             </div>
 
-            <div style={styles.actions}>
-              {!shield_active && (
-                <button onClick={handleBuyShield} disabled={shieldLoading}
-                  style={{ ...styles.actionBtn, background: 'rgba(29,78,216,0.4)', borderColor: 'rgba(99,102,241,0.4)' }}>
-                  {shieldLoading ? '...' : `🛡 Щит (20 💰 · 8 ч)`}
-                </button>
-              )}
-            </div>
+            {/* Ежедневная награда — под доходом замка */}
+            <DailyReward
+              canClaim={can_claim_daily}
+              rewardCoins={daily_reward_coins}
+              dailyNextAt={daily_next_at}
+              streak={daily_streak}
+              onClaimed={onRefresh}
+            />
 
             {/* Реферальная ссылка */}
             <div style={styles.refBlock}>
@@ -314,7 +318,7 @@ export function HomePage({ gameState, onRefresh }: Props) {
           />
         )}
 
-        {/* ── Магазин ── */}
+        {/* ── Лавка ── */}
         {tab === 'shop' && (
           <Shop
             onRefresh={onRefresh}
@@ -330,6 +334,15 @@ export function HomePage({ gameState, onRefresh }: Props) {
 
         {/* ── Лидерборд ── */}
         {tab === 'leaderboard' && <Leaderboard />}
+
+        {/* ── Кланы ── */}
+        {tab === 'clan' && (
+          <ClanPanel
+            userId={user.id}
+            userCoins={user.coins}
+            onRefresh={onRefresh}
+          />
+        )}
 
         {/* ── Админ ── */}
         {tab === 'admin' && isAdmin && <AdminPanel />}

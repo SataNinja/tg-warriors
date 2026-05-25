@@ -144,6 +144,8 @@ export interface PetOut {
   hunger: number
   hunger_status: string
   hunger_deple_seconds: number
+  wins: number
+  losses: number
 }
 
 export interface PetBattleResult {

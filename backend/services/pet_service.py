@@ -119,6 +119,8 @@ def pet_to_out(pet: Pet) -> PetOut:
         hunger=hunger,
         hunger_status=hunger_status_label(hunger),
         hunger_deple_seconds=get_hunger_deple_next_in(pet),
+        wins=getattr(pet, 'wins', 0),
+        losses=getattr(pet, 'losses', 0),
     )
 
 
@@ -305,6 +307,12 @@ async def do_pet_battle(db: AsyncSession, user: User, pet_id: int) -> PetBattleR
     pet.energy = max(0, current_energy - total_spent)
     pet.energy_updated_at = n
     pet.last_battle_at = n
+
+    # Обновляем статистику побед/поражений
+    if success:
+        pet.wins = getattr(pet, 'wins', 0) + 1
+    else:
+        pet.losses = getattr(pet, 'losses', 0) + 1
 
     await db.commit()
     await db.refresh(pet)

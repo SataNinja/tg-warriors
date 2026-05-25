@@ -3,7 +3,7 @@ import { CastleInfo, WeaponInfo } from '../types'
 import {
   fetchCastleInfo, upgradeCastle,
   fetchWeaponInfo, buyWeapon, upgradeWeapon,
-  buyEgg
+  buyEgg, buyCrystals
 } from '../api/client'
 
 interface Props {
@@ -12,13 +12,14 @@ interface Props {
   userIron: number
 }
 
-type ShopTab = 'castle' | 'weapon' | 'pets'
+type ShopTab = 'castle' | 'weapon' | 'pets' | 'crystals'
 
 const RARITY_COLORS: Record<string, string> = {
   common: '#9ca3af',
   rare: '#3b82f6',
   epic: '#a855f7',
   legendary: '#f59e0b',
+  mythic: '#ef4444',
 }
 
 const RARITY_LABELS: Record<string, string> = {
@@ -26,6 +27,7 @@ const RARITY_LABELS: Record<string, string> = {
   rare: 'Редкое',
   epic: 'Эпическое',
   legendary: 'Легендарное',
+  mythic: 'Мифическое',
 }
 
 const CASTLE_EMOJIS: Record<number, string> = {
@@ -36,24 +38,32 @@ const CASTLE_EMOJIS: Record<number, string> = {
 }
 const MAX_CASTLE_LEVEL = 20
 
+const SHOP_TABS: { key: ShopTab; label: string }[] = [
+  { key: 'castle',   label: '🏰 Замок' },
+  { key: 'weapon',   label: '⚔️ Оружие' },
+  { key: 'pets',     label: '🐾 Питомцы' },
+  { key: 'crystals', label: '💎 Кристаллы' },
+]
+
 export function Shop({ onRefresh, userCoins, userIron }: Props) {
   const [tab, setTab] = useState<ShopTab>('castle')
 
   return (
     <div style={styles.wrap}>
-      <div style={styles.header}>🏪 Магазин</div>
+      <div style={styles.header}>🏪 Лавка</div>
       <div style={styles.tabs}>
-        {(['castle', 'weapon', 'pets'] as ShopTab[]).map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            style={{ ...styles.tab, ...(tab === t ? styles.tabActive : {}) }}>
-            {t === 'castle' ? '🏰 Замок' : t === 'weapon' ? '⚔️ Оружие' : '🐾 Питомцы'}
+        {SHOP_TABS.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            style={{ ...styles.tab, ...(tab === t.key ? styles.tabActive : {}) }}>
+            {t.label}
           </button>
         ))}
       </div>
 
-      {tab === 'castle' && <CastleTab onRefresh={onRefresh} userCoins={userCoins} />}
-      {tab === 'weapon' && <WeaponTab onRefresh={onRefresh} userCoins={userCoins} userIron={userIron} />}
-      {tab === 'pets' && <PetsShopTab onRefresh={onRefresh} userCoins={userCoins} />}
+      {tab === 'castle'   && <CastleTab onRefresh={onRefresh} userCoins={userCoins} />}
+      {tab === 'weapon'   && <WeaponTab onRefresh={onRefresh} userCoins={userCoins} userIron={userIron} />}
+      {tab === 'pets'     && <PetsShopTab onRefresh={onRefresh} userCoins={userCoins} />}
+      {tab === 'crystals' && <CrystalsTab onRefresh={onRefresh} userCoins={userCoins} />}
     </div>
   )
 }
@@ -213,17 +223,17 @@ function WeaponTab({ onRefresh, userCoins, userIron }: { onRefresh: () => void; 
             <div className="anim-float" style={{ ...styles.castleEmoji, filter: `drop-shadow(0 0 12px ${rarityColor}60)` }}>⚔️</div>
             <div style={{ ...styles.castleName, color: rarityColor }}>{info.name}</div>
             <div style={{ fontSize: 12, color: rarityColor, marginBottom: 4 }}>
-              {RARITY_LABELS[info.rarity ?? 'common']} · Уровень {info.level}/10
+              {RARITY_LABELS[info.rarity ?? 'common']} · Уровень {info.level}/20
             </div>
             <div style={styles.statRow}>
               <span>💥 Бонус к силе: <b>+{info.attack_bonus}</b></span>
             </div>
           </div>
 
-          {info.level < 10 && info.upgrade_cost !== null ? (
+          {info.level < 20 && info.upgrade_cost !== null ? (
             <div style={styles.upgradeCard}>
-              <div style={styles.upgradeTitle}>⬆️ Прокачать до уровня {info.level + 1}</div>
-              <div style={styles.upgradeBonus}>+3 к силе</div>
+              <div style={styles.upgradeTitle}>⬆️ Прокачать до уровня {info.level + 1}/20</div>
+              <div style={styles.upgradeBonus}>+3 к силе{[4,8,13,18].includes(info.level + 1) ? ' ✨ Эволюция!' : ''}</div>
               <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>
                 🔩 У тебя железа: {userIron}
               </div>
@@ -239,7 +249,7 @@ function WeaponTab({ onRefresh, userCoins, userIron }: { onRefresh: () => void; 
               </button>
             </div>
           ) : (
-            <div style={styles.maxLevel}>⚔️ Оружие на максимальном уровне!</div>
+            <div style={styles.maxLevel}>⚔️ Оружие на максимальном уровне (20/20)!</div>
           )}
         </div>
       )}
@@ -251,7 +261,7 @@ function WeaponTab({ onRefresh, userCoins, userIron }: { onRefresh: () => void; 
   )
 }
 
-// ── Вкладка Питомцы (магазин) ──────────────────────────────────────────────
+// ── Вкладка Питомцы (лавка) ────────────────────────────────────────────────
 const EGGS = [
   { type: 'common', name: 'Обычное яйцо',  emoji: '🥚', cost: 200,  hatch: '2 ч',  desc: '10 обычных питомцев' },
   { type: 'rare',   name: 'Редкое яйцо',   emoji: '🔮', cost: 500,  hatch: '6 ч',  desc: '10 редких питомцев' },
@@ -303,6 +313,69 @@ function PetsShopTab({ onRefresh, userCoins }: { onRefresh: () => void; userCoin
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+// ── Вкладка Кристаллы ──────────────────────────────────────────────────────
+const CRYSTAL_PACKS = [
+  { amount: 1,  cost: 500,  label: '💎 ×1',  bonus: '' },
+  { amount: 5,  cost: 2200, label: '💎 ×5',  bonus: '+5% бонус' },
+  { amount: 10, cost: 4000, label: '💎 ×10', bonus: '+10% бонус' },
+]
+
+function CrystalsTab({ onRefresh, userCoins }: { onRefresh: () => void; userCoins: number }) {
+  const [loading, setLoading] = useState<number | null>(null)
+  const [msg, setMsg] = useState('')
+
+  const handleBuy = async (amount: number, cost: number) => {
+    if (userCoins < cost) return
+    setLoading(amount)
+    try {
+      const res = await buyCrystals(amount)
+      setMsg(`✅ Получено ${res.crystals_bought} 💎! Баланс: ${res.new_balance} 💰`)
+      onRefresh()
+    } catch (e: unknown) {
+      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Ошибка')
+    } finally {
+      setLoading(null)
+      setTimeout(() => setMsg(''), 3000)
+    }
+  }
+
+  return (
+    <div>
+      <div style={{ fontSize: 13, opacity: 0.7, textAlign: 'center', marginBottom: 14 }}>
+        Кристаллы нужны для прокачки питомцев.<br />
+        Также зарабатываются за серии побед и ежедневные задания.
+      </div>
+      {CRYSTAL_PACKS.map(pack => (
+        <div key={pack.amount} style={{
+          ...styles.upgradeCard,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+        }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 18 }}>{pack.label}</div>
+            {pack.bonus && <div style={{ fontSize: 12, color: '#a855f7' }}>{pack.bonus}</div>}
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: userCoins >= pack.cost ? '#4ade80' : '#f87171', marginBottom: 6 }}>
+              {pack.cost.toLocaleString()} 💰
+            </div>
+            <button
+              onClick={() => handleBuy(pack.amount, pack.cost)}
+              disabled={loading === pack.amount || userCoins < pack.cost}
+              style={{ ...styles.upgradeBtn, width: 'auto', padding: '7px 18px', fontSize: 13, opacity: userCoins < pack.cost ? 0.4 : 1 }}
+            >
+              {loading === pack.amount ? '...' : 'Купить'}
+            </button>
+          </div>
+        </div>
+      ))}
+      {msg && <div style={{ textAlign: 'center', fontSize: 13, marginTop: 8, color: msg.startsWith('✅') ? '#4ade80' : '#f87171' }}>{msg}</div>}
+      <div style={styles.ironHint}>
+        💎 Кристаллы также выдаются каждые 10 побед в бою и на 7-й день ежедневного входа
+      </div>
     </div>
   )
 }

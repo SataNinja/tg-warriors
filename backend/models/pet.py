@@ -33,6 +33,10 @@ class Pet(Base):
     hunger: Mapped[int] = mapped_column(Integer, default=100)
     hunger_updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Статистика боёв
+    wins: Mapped[int] = mapped_column(Integer, default=0)
+    losses: Mapped[int] = mapped_column(Integer, default=0)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     owner: Mapped["User"] = relationship("User", back_populates="pets")

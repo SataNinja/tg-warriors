@@ -97,13 +97,22 @@ MAX_CASTLE_LEVEL = 20
 # ── Данные оружия ──────────────────────────────────────────────────────────────
 WEAPON_BUY_COST = 100
 WEAPON_UPGRADE_IRON_BASE = 5
-MAX_WEAPON_LEVEL = 10
+MAX_WEAPON_LEVEL = 20
 
 WEAPON_NAMES = {
     "common":    "Железный меч",
     "rare":      "Стальной клинок",
     "epic":      "Клинок Судьбы",
     "legendary": "Меч Дракона",
+    "mythic":    "Меч Богов",
+}
+
+# Пороги смены редкости: level → новая редкость
+WEAPON_RARITY_THRESHOLDS = {
+    4:  ("rare",      "Стальной клинок"),
+    8:  ("epic",      "Клинок Судьбы"),
+    13: ("legendary", "Меч Дракона"),
+    18: ("mythic",    "Меч Богов"),
 }
 
 # ── 30 видов питомцев ─────────────────────────────────────────────────────────
@@ -268,7 +277,7 @@ async def upgrade_weapon(db: AsyncSession, user: User) -> WeaponUpgradeResult:
     if not w:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Сначала купи оружие")
     if w.level >= MAX_WEAPON_LEVEL:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Оружие на максимальном уровне")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Оружие уже на максимальном уровне ({MAX_WEAPON_LEVEL})")
     iron_cost = WEAPON_UPGRADE_IRON_BASE * w.level
     if user.iron < iron_cost:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Нужно {iron_cost} железа. У тебя {user.iron}.")
@@ -276,18 +285,22 @@ async def upgrade_weapon(db: AsyncSession, user: User) -> WeaponUpgradeResult:
     w.level += 1
     w.attack_bonus += 3
 
-    if w.level == 4 and w.rarity == "common":
-        w.rarity = "rare"; w.name = WEAPON_NAMES["rare"]
-    elif w.level == 7 and w.rarity == "rare":
-        w.rarity = "epic"; w.name = WEAPON_NAMES["epic"]
-    elif w.level == 10 and w.rarity == "epic":
-        w.rarity = "legendary"; w.name = WEAPON_NAMES["legendary"]
+    # Смена редкости по порогам
+    if w.level in WEAPON_RARITY_THRESHOLDS:
+        new_rarity, new_name = WEAPON_RARITY_THRESHOLDS[w.level]
+        w.rarity = new_rarity
+        w.name = new_name
+
+    evolved_msg = ""
+    if w.level in WEAPON_RARITY_THRESHOLDS:
+        _, new_name = WEAPON_RARITY_THRESHOLDS[w.level]
+        evolved_msg = f" ✨ Оружие эволюционировало в «{new_name}»!"
 
     await db.commit()
     return WeaponUpgradeResult(
         new_level=w.level, new_attack_bonus=w.attack_bonus,
         iron_spent=iron_cost, new_iron=user.iron,
-        message=f"⚔️ Оружие прокачано до уровня {w.level}! +3 к силе."
+        message=f"⚔️ Оружие прокачано до уровня {w.level}/{MAX_WEAPON_LEVEL}! +3 к силе.{evolved_msg}"
     )
 
 

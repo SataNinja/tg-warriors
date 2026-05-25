@@ -38,7 +38,7 @@ const CASTLE_EMOJIS: Record<number, string> = {
 // ── Тултип-инфо ─────────────────────────────────────────────────────────────
 function InfoTooltip({ text, children }: { text: string; children: React.ReactNode }) {
   const [show, setShow] = useState(false)
-  const [coords, setCoords] = useState({ top: 0, left: 0, arrowLeft: '50%' })
+  const [coords, setCoords] = useState({ top: 0, left: 0, arrowLeft: '50%', below: false })
   const ref = useRef<HTMLSpanElement>(null)
 
   // Закрывать при клике/тапе снаружи
@@ -60,6 +60,7 @@ function InfoTooltip({ text, children }: { text: string; children: React.ReactNo
     if (ref.current) {
       const r = ref.current.getBoundingClientRect()
       const screenW = window.innerWidth
+      const screenH = window.innerHeight
       // Ширина тултипа — не шире экрана минус 24px отступы
       const tw = Math.min(220, screenW - 24)
       const centerX = r.left + r.width / 2
@@ -71,7 +72,17 @@ function InfoTooltip({ text, children }: { text: string; children: React.ReactNo
       // Стрелка указывает строго на элемент
       const arrowPx = Math.max(10, Math.min(tw - 10, centerX - left))
 
-      setCoords({ top: r.top - 6, left, arrowLeft: `${arrowPx}px` })
+      // Показывать снизу, если мало места сверху (< 120px) или при близости к верху экрана
+      const spaceAbove = r.top
+      const spaceBelow = screenH - r.bottom
+      const below = spaceAbove < 120 || spaceBelow > spaceAbove
+
+      setCoords({
+        top: below ? r.bottom + 8 : r.top - 8,
+        left,
+        arrowLeft: `${arrowPx}px`,
+        below,
+      })
     }
     setShow(true)
   }
@@ -91,7 +102,8 @@ function InfoTooltip({ text, children }: { text: string; children: React.ReactNo
           position: 'fixed',
           top: coords.top,
           left: coords.left,
-          transform: 'translateY(-100%)',
+          // Если ниже — не сдвигаем вверх; если выше — уходим вверх на 100%
+          transform: coords.below ? 'none' : 'translateY(-100%)',
           width: tooltipW,
           background: 'rgba(15,15,25,0.97)',
           border: '1px solid rgba(255,255,255,0.15)',
@@ -106,17 +118,32 @@ function InfoTooltip({ text, children }: { text: string; children: React.ReactNo
           backdropFilter: 'blur(10px)',
           pointerEvents: 'none',
         }}>
+          {/* Стрелка — сверху (если тултип ниже элемента) или снизу (если выше) */}
+          {coords.below && (
+            <span style={{
+              position: 'absolute',
+              bottom: '100%',
+              left: coords.arrowLeft,
+              transform: 'translateX(-50%)',
+              width: 0, height: 0,
+              borderLeft: '6px solid transparent',
+              borderRight: '6px solid transparent',
+              borderBottom: '6px solid rgba(255,255,255,0.15)',
+            }} />
+          )}
           {text}
-          <span style={{
-            position: 'absolute',
-            top: '100%',
-            left: coords.arrowLeft,
-            transform: 'translateX(-50%)',
-            width: 0, height: 0,
-            borderLeft: '6px solid transparent',
-            borderRight: '6px solid transparent',
-            borderTop: '6px solid rgba(255,255,255,0.15)',
-          }} />
+          {!coords.below && (
+            <span style={{
+              position: 'absolute',
+              top: '100%',
+              left: coords.arrowLeft,
+              transform: 'translateX(-50%)',
+              width: 0, height: 0,
+              borderLeft: '6px solid transparent',
+              borderRight: '6px solid transparent',
+              borderTop: '6px solid rgba(255,255,255,0.15)',
+            }} />
+          )}
         </span>,
         document.body
       )}
