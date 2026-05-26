@@ -2,7 +2,7 @@
  * 🧠 Память — запомни последовательность цифр и введи её.
  * 5 раундов, сложность растёт. Score = правильные раунды × 1000
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 
 interface Props { onFinish: (score: number) => void }
 

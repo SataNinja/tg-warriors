@@ -16,7 +16,6 @@ export function AimGame({ onFinish }: Props) {
   const [started, setStarted] = useState(false)
   const [target, setTarget] = useState<Target | null>(null)
   const [hits, setHits] = useState(0)
-  const [misses, setMisses] = useState(0)
   const [done, setDone] = useState(false)
   const [flash, setFlash] = useState<'hit' | 'miss' | null>(null)
   const areaRef = useRef<HTMLDivElement>(null)

@@ -503,7 +503,6 @@ function MyClanView(p: MyClanProps) {
           clan={clan}
           warItems={warItems}
           warStatus={warStatus}
-          userId={userId}
           isLeader={isLeader}
           busy={busy}
           onBuyWarItem={p.onBuyWarItem}
@@ -606,7 +605,6 @@ interface WarSectionProps {
   clan: ClanInfo
   warItems: WarItemInfo[]
   warStatus: WarStatus | null
-  userId: number
   isLeader: boolean
   busy: boolean
   onBuyWarItem: (type: string, name: string) => void
@@ -618,7 +616,7 @@ interface WarSectionProps {
 }
 
 function WarSection(p: WarSectionProps) {
-  const { clan, warItems, warStatus, userId, isLeader, busy } = p
+  const { clan, warItems, warStatus, isLeader, busy } = p
   const ws = warStatus
   const myParticipation = ws?.my_participation
 
