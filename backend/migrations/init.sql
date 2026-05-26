@@ -206,3 +206,41 @@ ALTER TABLE clans ADD COLUMN IF NOT EXISTS war_buff_defense   BOOLEAN NOT NULL D
 ALTER TABLE clans ADD COLUMN IF NOT EXISTS war_buff_artifact  BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE clans ADD COLUMN IF NOT EXISTS war_buff_provisions BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE clans ADD COLUMN IF NOT EXISTS max_members INTEGER NOT NULL DEFAULT 10;
+
+-- Война кланов v2: стадии, подготовка, текущая война
+ALTER TABLE clans ADD COLUMN IF NOT EXISTS war_prepared_at TIMESTAMPTZ;
+ALTER TABLE clans ADD COLUMN IF NOT EXISTS current_war_id  INTEGER;
+
+-- Ранги участников клана
+ALTER TABLE clan_members ADD COLUMN IF NOT EXISTS rank VARCHAR(32) NOT NULL DEFAULT 'Новобранец';
+
+-- Участники войны (кто нажал «Участвую»)
+CREATE TABLE IF NOT EXISTS clan_war_participants (
+    id              SERIAL      PRIMARY KEY,
+    clan_id         INTEGER     NOT NULL REFERENCES clans(id) ON DELETE CASCADE,
+    user_id         BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    is_participating BOOLEAN    NOT NULL DEFAULT TRUE,
+    set_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(clan_id, user_id)
+);
+
+-- Битвы 1v1 внутри войны
+CREATE TABLE IF NOT EXISTS clan_war_battles (
+    id          SERIAL      PRIMARY KEY,
+    war_id      INTEGER     NOT NULL REFERENCES clan_wars(id) ON DELETE CASCADE,
+    player_a_id BIGINT      NOT NULL REFERENCES users(id),
+    player_b_id BIGINT      NOT NULL REFERENCES users(id),
+    game_type   VARCHAR(32) NOT NULL,    -- reaction / math / memory / aim
+    day         INTEGER     NOT NULL,    -- 1 или 2
+    battle_num  INTEGER     NOT NULL,    -- 1 или 2
+    score_a     INTEGER,
+    score_b     INTEGER,
+    winner_id   BIGINT,
+    played_at_a TIMESTAMPTZ,
+    played_at_b TIMESTAMPTZ,
+    expires_at  TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_war_battles_war    ON clan_war_battles(war_id);
+CREATE INDEX IF NOT EXISTS idx_war_battles_players ON clan_war_battles(player_a_id, player_b_id);
+CREATE INDEX IF NOT EXISTS idx_war_participants_clan ON clan_war_participants(clan_id);

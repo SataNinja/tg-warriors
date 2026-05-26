@@ -272,12 +272,14 @@ export interface ClanListItem {
   members_count: number
   total_power: number
   wins: number
+  war_stage: number
 }
 
 export interface ClanMemberInfo {
   user_id: number
   name: string
   role: string
+  rank: string
   contribution: number
 }
 
@@ -298,6 +300,8 @@ export interface ClanInfo {
   war_buff_defense: boolean
   war_buff_artifact: boolean
   war_buff_provisions: boolean
+  war_stage: number
+  war_prepared_at: string | null
 }
 
 export interface WarItemInfo {
@@ -305,6 +309,33 @@ export interface WarItemInfo {
   name: string
   cost: number
   desc: string
+}
+
+export interface WarBattle {
+  id: number
+  opponent_id: number
+  opponent_name: string
+  game_type: string
+  day: number
+  battle_num: number
+  my_score: number | null
+  opponent_score: number | null
+  winner_id: number | null
+  expires_at: string
+  played_by_me: boolean
+}
+
+export interface WarStatus {
+  war_id: number | null
+  war_stage: number
+  opponent_clan: { id: number; name: string; emblem: string; total_power: number } | null
+  my_clan_score: number
+  opponent_clan_score: number
+  battles: WarBattle[]
+  participants: { user_id: number; name: string; is_participating: boolean }[]
+  is_finished: boolean
+  war_prepared_at: string | null
+  my_participation: boolean | null
 }
 
 export async function fetchClanList(): Promise<ClanListItem[]> {
@@ -349,6 +380,36 @@ export async function buyWarItem(itemType: string) {
 
 export async function fetchWarItems(): Promise<WarItemInfo[]> {
   const { data } = await api.get('/clans/war/items')
+  return data
+}
+
+export async function prepareForWar() {
+  const { data } = await api.post('/clans/war/prepare')
+  return data
+}
+
+export async function setWarParticipation(participating: boolean) {
+  const { data } = await api.post('/clans/war/participate', { participating })
+  return data
+}
+
+export async function startClanWar() {
+  const { data } = await api.post('/clans/war/start')
+  return data
+}
+
+export async function fetchWarStatus(): Promise<WarStatus> {
+  const { data } = await api.get('/clans/war/status')
+  return data
+}
+
+export async function submitBattleScore(battleId: number, score: number) {
+  const { data } = await api.post(`/clans/war/battle/${battleId}/submit`, { score })
+  return data
+}
+
+export async function setMemberRole(userId: number, role: string, rank?: string) {
+  const { data } = await api.post('/clans/members/set-role', { user_id: userId, role, rank })
   return data
 }
 
