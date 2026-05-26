@@ -109,12 +109,73 @@ WAR_ITEMS = {
 }
 
 GAME_TYPES = ["reaction", "math", "memory", "aim"]
+WAR_DURATION_DAYS = 2   # максимальная длительность войны
 
 # ── Вспомогательные ──────────────────────────────────────────────────────────
 
 async def _get_membership(db: AsyncSession, user_id: int) -> Optional[ClanMember]:
     r = await db.execute(select(ClanMember).where(ClanMember.user_id == user_id))
     return r.scalar_one_or_none()
+
+async def _try_finish_war(db: AsyncSession, war: ClanWar) -> bool:
+    """
+    Проверяет, нужно ли завершить войну.
+    Условия: все битвы сыграны ИЛИ истекло 2 дня с начала войны.
+    Возвращает True если война была завершена.
+    """
+    if war.is_finished:
+        return False
+
+    now = datetime.now(timezone.utc)
+    time_expired = (now - war.started_at).total_seconds() >= WAR_DURATION_DAYS * 86400
+    all_played = all(
+        b.score_a is not None and b.score_b is not None
+        for b in war.battles
+    )
+
+    if not (all_played or time_expired):
+        return False
+
+    # Считаем победы по кланам
+    clan_a_r = await db.execute(select(ClanMember.user_id).where(ClanMember.clan_id == war.clan_a_id))
+    clan_a_set = set(clan_a_r.scalars().all())
+    score_a = sum(1 for b in war.battles if b.winner_id and b.winner_id in clan_a_set)
+    score_b = sum(1 for b in war.battles if b.winner_id and b.winner_id not in clan_a_set)
+
+    war.is_finished = True
+    war.finished_at = now
+    if score_a > score_b:
+        war.winner_clan_id = war.clan_a_id
+    elif score_b > score_a:
+        war.winner_clan_id = war.clan_b_id
+    # иначе ничья, winner_clan_id = None
+
+    def _reset_clan(c: Clan, won: bool):
+        c.war_stage = 0
+        # current_war_id намеренно НЕ сбрасываем — чтобы фронт мог показать итоги войны
+        c.war_prepared_at = None
+        c.war_buff_attack = False
+        c.war_buff_defense = False
+        c.war_buff_artifact = False
+        c.war_buff_provisions = False
+        if won:
+            c.wins += 1
+        else:
+            c.losses += 1
+
+    clan_a_obj_r = await db.execute(select(Clan).where(Clan.id == war.clan_a_id))
+    clan_a_obj = clan_a_obj_r.scalar_one_or_none()
+    clan_b_obj_r = await db.execute(select(Clan).where(Clan.id == war.clan_b_id))
+    clan_b_obj = clan_b_obj_r.scalar_one_or_none()
+
+    if clan_a_obj:
+        _reset_clan(clan_a_obj, war.winner_clan_id == war.clan_a_id)
+    if clan_b_obj:
+        _reset_clan(clan_b_obj, war.winner_clan_id == war.clan_b_id)
+
+    await db.commit()
+    return True
+
 
 async def _get_clan(db: AsyncSession, clan_id: int) -> Clan:
     r = await db.execute(select(Clan).where(Clan.id == clan_id))
@@ -313,6 +374,7 @@ async def prepare_for_war(user: User = Depends(get_current_user), db: AsyncSessi
         raise HTTPException(400, "Клан уже в состоянии подготовки или войны.")
     clan.war_stage = 1
     clan.war_prepared_at = datetime.now(timezone.utc)
+    clan.current_war_id = None  # сбрасываем ссылку на прошлую войну
     await db.execute(delete(ClanWarParticipant).where(ClanWarParticipant.clan_id == clan.id))
     await db.commit()
     return {"ok": True, "message": "⚔️ Подготовка начата! Участники могут подтвердить участие в течение суток."}
@@ -437,13 +499,14 @@ async def get_war_status(user: User = Depends(get_current_user), db: AsyncSessio
     ]
     my_participation = next((p.is_participating for p in part_rows if p.user_id == user.id), None)
 
-    if clan.war_stage < 2 or not clan.current_war_id:
+    if clan.current_war_id is None:
         return {
             "war_id": None, "war_stage": clan.war_stage,
             "opponent_clan": None, "my_clan_score": 0, "opponent_clan_score": 0,
             "battles": [], "participants": participants_out, "is_finished": False,
             "war_prepared_at": clan.war_prepared_at.isoformat() if clan.war_prepared_at else None,
             "my_participation": my_participation,
+            "war_expires_at": None, "winner_clan_id": None,
         }
 
     war_r = await db.execute(select(ClanWar).where(ClanWar.id == clan.current_war_id))
@@ -451,7 +514,12 @@ async def get_war_status(user: User = Depends(get_current_user), db: AsyncSessio
     if not war:
         return {"war_id": None, "war_stage": 0, "opponent_clan": None, "my_clan_score": 0,
                 "opponent_clan_score": 0, "battles": [], "participants": [], "is_finished": False,
-                "war_prepared_at": None, "my_participation": None}
+                "war_prepared_at": None, "my_participation": None,
+                "war_expires_at": None, "winner_clan_id": None}
+
+    # Проверяем авто-завершение: по таймауту или если все битвы сыграны
+    await _try_finish_war(db, war)
+    await db.refresh(war)  # обновляем поля после возможного commit
 
     opp_clan_id = war.clan_b_id if war.clan_a_id == clan.id else war.clan_a_id
     opp_r = await db.execute(select(Clan).where(Clan.id == opp_clan_id))
@@ -505,6 +573,8 @@ async def get_war_status(user: User = Depends(get_current_user), db: AsyncSessio
         "is_finished": war.is_finished,
         "war_prepared_at": clan.war_prepared_at.isoformat() if clan.war_prepared_at else None,
         "my_participation": my_participation,
+        "war_expires_at": (war.started_at + timedelta(days=WAR_DURATION_DAYS)).isoformat(),
+        "winner_clan_id": war.winner_clan_id,
     }
 
 @router.post("/war/battle/{battle_id}/submit")
@@ -530,15 +600,23 @@ async def submit_battle_score(battle_id: int, body: SubmitScoreRequest, user: Us
         battle.score_a = body.score; battle.played_at_a = now
     else:
         battle.score_b = body.score; battle.played_at_b = now
-    if battle.score_a is not None and battle.score_b is not None:
+    both_played = battle.score_a is not None and battle.score_b is not None
+    if both_played:
         if battle.score_a > battle.score_b:
             battle.winner_id = battle.player_a_id
         elif battle.score_b > battle.score_a:
             battle.winner_id = battle.player_b_id
     await db.commit()
+
+    # Проверяем авто-завершение войны после каждой сыгранной битвы
+    war_r2 = await db.execute(select(ClanWar).where(ClanWar.id == battle.war_id))
+    war_obj = war_r2.scalar_one_or_none()
+    if war_obj:
+        await _try_finish_war(db, war_obj)
+
     return {
         "ok": True, "my_score": body.score,
         "winner_id": battle.winner_id,
-        "both_played": battle.score_a is not None and battle.score_b is not None,
+        "both_played": both_played,
         "message": "✅ Результат записан!",
     }

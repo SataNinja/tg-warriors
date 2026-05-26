@@ -336,6 +336,8 @@ export interface WarStatus {
   is_finished: boolean
   war_prepared_at: string | null
   my_participation: boolean | null
+  war_expires_at: string | null
+  winner_clan_id: number | null
 }
 
 export async function fetchClanList(): Promise<ClanListItem[]> {

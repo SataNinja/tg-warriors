@@ -34,6 +34,49 @@ const WAR_ITEM_EMOJI: Record<string, string> = {
   provisions: '🍖',
 }
 
+// ── Таймер войны ─────────────────────────────────────────────────────────────
+
+function calcTimeLeft(iso: string | null | undefined) {
+  if (!iso) return null
+  const diff = Math.max(0, new Date(iso).getTime() - Date.now())
+  const secs = Math.floor(diff / 1000)
+  return {
+    days: Math.floor(secs / 86400),
+    hours: Math.floor((secs % 86400) / 3600),
+    mins: Math.floor((secs % 3600) / 60),
+    expired: secs === 0,
+  }
+}
+
+function useWarCountdown(expiresAt: string | null | undefined) {
+  const [t, setT] = useState(() => calcTimeLeft(expiresAt))
+  useEffect(() => {
+    setT(calcTimeLeft(expiresAt))
+    const id = setInterval(() => setT(calcTimeLeft(expiresAt)), 60_000)
+    return () => clearInterval(id)
+  }, [expiresAt])
+  return t
+}
+
+function WarCountdownBadge({ expiresAt }: { expiresAt: string | null | undefined }) {
+  const t = useWarCountdown(expiresAt)
+  if (!t) return null
+  const color = t.expired ? '#f87171' : '#fbbf24'
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 12, color,
+      background: t.expired ? 'rgba(239,68,68,0.1)' : 'rgba(251,191,36,0.1)',
+      border: `1px solid ${t.expired ? 'rgba(239,68,68,0.3)' : 'rgba(251,191,36,0.3)'}`,
+      borderRadius: 8, padding: '6px 12px', marginBottom: 12, fontWeight: 600,
+    }}>
+      {t.expired
+        ? '⌛ Время войны истекло — ждём подведения итогов...'
+        : `⏰ До конца войны: ${t.days > 0 ? `${t.days}д ` : ''}${t.hours}ч ${t.mins}м`}
+    </div>
+  )
+}
+
 // ── ClanPanel ─────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -599,6 +642,77 @@ function RankEditor({
   )
 }
 
+// ── Итоги войны ───────────────────────────────────────────────────────────────
+
+function WarResultsView({ clan, ws, isLeader, busy, warItems, onBuyWarItem, onPrepare }: {
+  clan: ClanInfo
+  ws: WarStatus
+  isLeader: boolean
+  busy: boolean
+  warItems: WarItemInfo[]
+  onBuyWarItem: (type: string, name: string) => void
+  onPrepare: () => void
+}) {
+  const won = ws.winner_clan_id !== null && ws.winner_clan_id === clan.id
+  const draw = ws.winner_clan_id === null
+  const lost = !draw && !won
+
+  const resultColor = won ? '#22c55e' : lost ? '#f87171' : '#fbbf24'
+  const resultEmoji = won ? '🏆' : lost ? '💀' : '🤝'
+  const resultText = won ? 'Победа!' : lost ? 'Поражение' : 'Ничья'
+
+  return (
+    <div>
+      <div style={{
+        ...s.card,
+        background: `${resultColor}12`,
+        border: `1px solid ${resultColor}40`,
+        textAlign: 'center',
+      }}>
+        <div style={{ fontSize: 52, marginBottom: 6 }}>{resultEmoji}</div>
+        <div style={{ fontWeight: 800, fontSize: 22, color: resultColor, marginBottom: 4 }}>{resultText}</div>
+        {ws.opponent_clan && (
+          <div style={{ fontSize: 13, opacity: 0.65, marginBottom: 14 }}>
+            vs {ws.opponent_clan.emblem} {ws.opponent_clan.name}
+          </div>
+        )}
+
+        {/* Счёт */}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 38, fontWeight: 900, color: '#34d399' }}>{ws.my_clan_score}</div>
+            <div style={{ fontSize: 11, opacity: 0.5 }}>{clan.name}</div>
+          </div>
+          <div style={{ fontSize: 20, opacity: 0.35 }}>:</div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 38, fontWeight: 900, color: '#f87171' }}>{ws.opponent_clan_score}</div>
+            <div style={{ fontSize: 11, opacity: 0.5 }}>{ws.opponent_clan?.name ?? '???'}</div>
+          </div>
+        </div>
+
+        {isLeader ? (
+          <button onClick={onPrepare} disabled={busy} style={s.btn('#3b82f6')}>
+            {busy ? '...' : '⚔️ Подготовиться к новой войне'}
+          </button>
+        ) : (
+          <div style={{ fontSize: 12, opacity: 0.45, paddingBottom: 4 }}>
+            Лидер клана может начать подготовку к новой войне
+          </div>
+        )}
+      </div>
+
+      <WarItemsList
+        warItems={warItems}
+        clan={clan}
+        isLeader={isLeader}
+        busy={busy}
+        onBuy={onBuyWarItem}
+        treasury={clan.treasury}
+      />
+    </div>
+  )
+}
+
 // ── Секция войны ──────────────────────────────────────────────────────────────
 
 interface WarSectionProps {
@@ -619,6 +733,21 @@ function WarSection(p: WarSectionProps) {
   const { clan, warItems, warStatus, isLeader, busy } = p
   const ws = warStatus
   const myParticipation = ws?.my_participation
+
+  // Война завершена — показываем итоги (приоритет выше всех стадий)
+  if (ws && ws.is_finished) {
+    return (
+      <WarResultsView
+        clan={clan}
+        ws={ws}
+        isLeader={isLeader}
+        busy={busy}
+        warItems={warItems}
+        onBuyWarItem={p.onBuyWarItem}
+        onPrepare={p.onPrepare}
+      />
+    )
+  }
 
   // stage 0 — нет войны
   if (clan.war_stage === 0) return (
@@ -732,6 +861,9 @@ function WarSection(p: WarSectionProps) {
   // stage 2 — идёт война
   if (clan.war_stage === 2 && ws) return (
     <div>
+      {/* Таймер войны */}
+      <WarCountdownBadge expiresAt={ws.war_expires_at} />
+
       {/* Соперник и счёт */}
       {ws.opponent_clan && (
         <div style={{

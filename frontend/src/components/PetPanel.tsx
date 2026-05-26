@@ -294,26 +294,17 @@ function PetStackCard({
   onRelease: (id: number, name: string) => void
   onUpgrade: (id: number) => void
 }) {
-  const [expanded, setExpanded] = useState(pets.length === 1)
+  // Все карточки свёрнуты по умолчанию
+  const [expanded, setExpanded] = useState(false)
   const first = pets[0]
   const emoji = PET_EMOJIS[first.pet_type] ?? '🐾'
   const rarityColor = RARITY_COLORS[first.rarity] ?? '#9ca3af'
   const totalPower = pets.reduce((s, p) => s + p.effective_power_bonus, 0)
 
-  if (pets.length === 1) {
-    return (
-      <PetCard
-        pet={first}
-        userCoins={userCoins}
-        userCrystals={userCrystals}
-        foodList={foodList}
-        onBattle={onBattle}
-        onFeed={onFeed}
-        onRelease={onRelease}
-        onUpgrade={onUpgrade}
-      />
-    )
-  }
+  // Цвета для свёрнутого превью (только для одиночного питомца)
+  const hungerColor = first.hunger >= 70 ? '#4ade80' : first.hunger >= 30 ? '#fbbf24' : '#f87171'
+  const energyPct = (first.energy / first.max_energy) * 100
+  const energyColor = energyPct > 50 ? '#4ade80' : energyPct > 25 ? '#fbbf24' : '#f87171'
 
   return (
     <div style={{
@@ -325,34 +316,50 @@ function PetStackCard({
         ? 'rgba(255,255,255,0.06)'
         : `linear-gradient(135deg, rgba(0,0,0,0.2) 0%, rgba(${rarityColor === '#a855f7' ? '168,85,247' : rarityColor === '#f59e0b' ? '245,158,11' : '59,130,246'},0.1) 100%)`,
     }}>
-      {/* Шапка стака */}
+      {/* Шапка — кликабельная, всегда видна */}
       <div
         style={{
           display: 'flex', alignItems: 'center', gap: 10,
-          padding: '12px 14px', cursor: 'pointer',
+          padding: '11px 14px', cursor: 'pointer',
           background: expanded ? `${rarityColor}18` : 'transparent',
           transition: 'background 0.2s',
         }}
         onClick={() => setExpanded(e => !e)}
       >
-        <span className={expanded ? 'anim-float' : ''} style={{ fontSize: 32 }}>{emoji}</span>
-        <div style={{ flex: 1 }}>
-          <div style={{ ...styles.petName, color: rarityColor }}>
+        <span className={expanded ? 'anim-float' : ''} style={{ fontSize: 30 }}>{emoji}</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ ...styles.petName, color: rarityColor, marginBottom: 2 }}>
             {first.name}
-            <span style={{
-              marginLeft: 6, background: rarityColor, color: '#fff',
-              borderRadius: 6, padding: '1px 8px', fontSize: 11, fontWeight: 800,
-            }}>×{pets.length}</span>
+            {pets.length > 1 && (
+              <span style={{
+                marginLeft: 6, background: rarityColor, color: '#fff',
+                borderRadius: 6, padding: '1px 8px', fontSize: 11, fontWeight: 800,
+              }}>×{pets.length}</span>
+            )}
           </div>
-          <div style={styles.petStats}>⚔️ +{totalPower} общая сила</div>
+          {/* Свёрнутое превью с ключевыми статами */}
+          {!expanded && (
+            pets.length === 1 ? (
+              <div style={{ fontSize: 11, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ color: hungerColor }}>🍖 {first.hunger}%</span>
+                <span style={{ color: energyColor }}>⚡ {first.energy}/{first.max_energy}</span>
+                <span style={{ color: '#a5b4fc' }}>⚔️ +{first.effective_power_bonus}</span>
+                {first.gold_bonus > 0 && <span style={{ color: '#fbbf24' }}>💰 +{first.gold_bonus}%</span>}
+              </div>
+            ) : (
+              <div style={{ fontSize: 11, color: '#a5b4fc' }}>⚔️ +{totalPower} общая сила</div>
+            )
+          )}
         </div>
-        <span style={{ fontSize: 16, color: rarityColor, opacity: 0.7 }}>{expanded ? '▲' : '▼'}</span>
+        <span style={{ fontSize: 14, color: rarityColor, opacity: 0.7, flexShrink: 0 }}>
+          {expanded ? '▲' : '▼'}
+        </span>
       </div>
 
       {expanded && (
-        <div>
-          {pets.map((p) => (
-            <div key={p.id} style={{ borderTop: `1px solid ${rarityColor}25` }}>
+        <div style={{ borderTop: `1px solid ${rarityColor}25` }}>
+          {pets.map((p, idx) => (
+            <div key={p.id} style={{ borderTop: idx > 0 ? `1px solid ${rarityColor}20` : 'none' }}>
               <PetCard
                 pet={p}
                 userCoins={userCoins}

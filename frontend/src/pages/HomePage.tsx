@@ -167,10 +167,10 @@ export function HomePage({ gameState, onRefresh }: Props) {
     { key: 'main',        emoji: '🏠', label: 'Замок' },
     { key: 'units',       emoji: '⚔️', label: 'Войска' },
     { key: 'raid',        emoji: '🗡',  label: 'Бой' },
+    { key: 'clan',        emoji: '⚔️', label: 'Кланы' },
     { key: 'shop',        emoji: '🏪', label: 'Лавка' },
     { key: 'pets',        emoji: '🐾', label: 'Питомник' },
     { key: 'leaderboard', emoji: '🏆', label: 'ТОП' },
-    { key: 'clan',        emoji: '⚔️', label: 'Кланы' },
     ...(isAdmin ? [{ key: 'admin' as Tab, emoji: '🛡', label: 'Админ' }] : []),
   ]
 
