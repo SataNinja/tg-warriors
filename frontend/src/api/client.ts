@@ -415,6 +415,16 @@ export async function setMemberRole(userId: number, role: string, rank?: string)
   return data
 }
 
+export async function deleteClan() {
+  const { data } = await api.post('/clans/delete')
+  return data as { ok: boolean; message: string }
+}
+
+export async function updateClan(name?: string, description?: string, emblem?: string) {
+  const { data } = await api.post('/clans/update', { name, description, emblem })
+  return data as { ok: boolean; message: string }
+}
+
 // ── Пассивный доход ───────────────────────────────────────────────────────────
 export async function claimPassiveIncome() {
   const { data } = await api.post('/daily/passive/claim')

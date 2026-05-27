@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { PetOut, PetBattleResult, EggOut, FoodItem } from '../types'
 import { fetchPets, doPetBattle, releasePet, feedPet, fetchEggs, hatchEgg, fetchFoodList, upgradePet } from '../api/client'
+import { sfxWin, sfxLose, sfxCoin, sfxSuccess, sfxError } from '../utils/sounds'
 
 interface Props {
   onRefresh: () => void
@@ -436,10 +437,12 @@ export function PetPanel({ onRefresh, userCoins, userCrystals }: Props) {
   }
 
   const handleFightDone = () => {
+    const res = pendingResult.current
     setFightingPet(null)
-    setBattleResult(pendingResult.current)
+    setBattleResult(res)
     pendingResult.current = null
     setBattling(false)
+    if (res) res.success ? sfxWin() : sfxLose()
     reload()
     onRefresh()
   }
@@ -447,10 +450,12 @@ export function PetPanel({ onRefresh, userCoins, userCrystals }: Props) {
   const handleFeed = async (petId: number, foodType: string) => {
     try {
       const res = await feedPet(petId, foodType)
+      sfxCoin()
       alert(res.message)
       reload()
       onRefresh()
     } catch (e: any) {
+      sfxError()
       alert(e?.response?.data?.detail ?? 'Ошибка')
     }
   }
@@ -472,10 +477,12 @@ export function PetPanel({ onRefresh, userCoins, userCrystals }: Props) {
   const handleUpgrade = async (petId: number) => {
     try {
       const res = await upgradePet(petId)
+      sfxSuccess()
       alert(`⬆️ ${res.name} прокачан до Lv.${res.level}! +3 сила, +1 к золоту.`)
       reload()
       onRefresh()
     } catch (e: any) {
+      sfxError()
       alert(e?.response?.data?.detail ?? 'Ошибка прокачки')
     }
   }
@@ -483,10 +490,12 @@ export function PetPanel({ onRefresh, userCoins, userCrystals }: Props) {
   const handleHatch = async (eggId: number) => {
     try {
       const res = await hatchEgg(eggId)
+      sfxCoin()
       alert(res.message)
       reload()
       onRefresh()
     } catch (e: any) {
+      sfxError()
       alert(e?.response?.data?.detail ?? 'Ошибка')
     }
   }

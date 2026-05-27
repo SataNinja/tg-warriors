@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { claimDaily } from '../api/client'
+import { sfxCoin, sfxError } from '../utils/sounds'
 
 const DAILY_REWARDS = [50, 75, 120, 200, 240, 300, 700]
 
@@ -53,8 +54,10 @@ export function DailyReward({ canClaim, rewardCoins, dailyNextAt, streak, onClai
     try {
       const res = await claimDaily()
       setClaimed(true)
+      sfxCoin()
       onClaimed(res.coins_earned)
     } catch (e: any) {
+      sfxError()
       alert(e?.response?.data?.detail ?? 'Ошибка')
     } finally {
       setLoading(false)

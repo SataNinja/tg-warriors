@@ -4,6 +4,7 @@ import { RaidResult, PveRaidResult } from '../types'
 import { BattleAnimation } from './BattleAnimation'
 import { BattleJournal } from './BattleJournal'
 import { useGameStore, OngoingBattle } from '../store/gameStore'
+import { sfxWin, sfxLose } from '../utils/sounds'
 
 interface Props {
   energy: number
@@ -107,7 +108,16 @@ export function RaidPanel({ energy, onRaidDone, attackerEmojis }: Props) {
     setBattleMeta(null)
     setScreen('result')
     onRaidDone()
+    // Звук по результату (result уже записан в state через setResult)
   }, [onRaidDone, setOngoingBattle])
+
+  // Звук при переходе на экран результата
+  useEffect(() => {
+    if (screen === 'result' && result) {
+      if (result.success) sfxWin()
+      else sfxLose()
+    }
+  }, [screen, result])
 
   // Месть — запускаем PvP рейд на конкретного игрока
   const handleRevenge = async (opponentId: number) => {

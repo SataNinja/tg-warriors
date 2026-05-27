@@ -10,7 +10,7 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, or_, func
+from sqlalchemy import select, delete, update, or_, func
 
 from core.database import get_db
 from models.user import User
@@ -42,6 +42,11 @@ class SetRoleRequest(BaseModel):
 
 class SubmitScoreRequest(BaseModel):
     score: int = Field(..., ge=0)
+
+class UpdateClanRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=2, max_length=32)
+    description: Optional[str] = Field(None, max_length=256)
+    emblem: Optional[str] = Field(None, max_length=8)
 
 class MemberInfo(BaseModel):
     user_id: int
@@ -288,13 +293,53 @@ async def leave_clan(user: User = Depends(get_current_user), db: AsyncSession = 
         raise HTTPException(400, "Ты не состоишь в клане.")
     clan = await _get_clan(db, membership.clan_id)
     if membership.role == "leader" and len(clan.members) > 1:
-        raise HTTPException(400, "Лидер не может покинуть клан, пока есть участники.")
+        raise HTTPException(400, "Лидер не может покинуть клан, пока есть участники. Сначала исключи всех или назначь нового лидера.")
     clan_name = clan.name
-    await db.delete(membership)
     if membership.role == "leader":
-        await db.delete(clan)
+        # Удаляем войны клана (FK без CASCADE — удаляем вручную)
+        await db.execute(delete(ClanWar).where(
+            or_(ClanWar.clan_a_id == clan.id, ClanWar.clan_b_id == clan.id)
+        ))
+        await db.delete(clan)  # CASCADE удалит всех участников и ClanWarParticipant
+    else:
+        await db.delete(membership)
     await db.commit()
     return {"ok": True, "message": f"Ты покинул клан «{clan_name}»."}
+
+@router.post("/delete")
+async def delete_clan(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Лидер удаляет весь клан (для всех участников)."""
+    membership = await _get_membership(db, user.id)
+    if not membership or membership.role != "leader":
+        raise HTTPException(403, "Только лидер может удалить клан.")
+    clan = await _get_clan(db, membership.clan_id)
+    clan_name = clan.name
+    await db.execute(delete(ClanWar).where(
+        or_(ClanWar.clan_a_id == clan.id, ClanWar.clan_b_id == clan.id)
+    ))
+    await db.delete(clan)
+    await db.commit()
+    return {"ok": True, "message": f"Клан «{clan_name}» удалён."}
+
+@router.post("/update")
+async def update_clan(body: UpdateClanRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Лидер редактирует название, описание или эмблему клана."""
+    membership = await _get_membership(db, user.id)
+    if not membership or membership.role != "leader":
+        raise HTTPException(403, "Только лидер может редактировать клан.")
+    clan = await _get_clan(db, membership.clan_id)
+    if body.name and body.name != clan.name:
+        existing = await db.execute(select(Clan).where(Clan.name == body.name))
+        if existing.scalar_one_or_none():
+            raise HTTPException(400, "Клан с таким именем уже существует.")
+        clan.name = body.name
+    if body.description is not None:
+        clan.description = body.description
+    if body.emblem:
+        clan.emblem = body.emblem
+    await db.commit()
+    await db.refresh(clan)
+    return {"ok": True, "message": "✅ Информация о клане обновлена."}
 
 @router.post("/contribute")
 async def contribute_to_clan(body: ContributeRequest, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):

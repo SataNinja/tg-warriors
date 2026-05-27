@@ -3,9 +3,11 @@ import {
   fetchClanList, fetchMyClan, createClan, joinClan, leaveClan,
   contributeToTreasury, buyWarItem, fetchWarItems, fetchWarStatus,
   prepareForWar, setWarParticipation, startClanWar, setMemberRole,
+  deleteClan, updateClan,
   ClanInfo, ClanListItem, WarItemInfo, WarStatus, WarBattle,
 } from '../api/client'
 import { GameLauncher } from './warGames/GameLauncher'
+import { sfxSuccess, sfxError, sfxWin, sfxLose } from '../utils/sounds'
 
 // ── Константы ─────────────────────────────────────────────────────────────────
 
@@ -85,7 +87,7 @@ interface Props {
   onRefresh?: () => void
 }
 
-type View = 'home' | 'list' | 'create' | 'mine'
+type View = 'home' | 'list' | 'create' | 'mine' | 'edit'
 
 export function ClanPanel({ userId, userCoins, onRefresh }: Props) {
   const [view, setView] = useState<View>('home')
@@ -103,9 +105,15 @@ export function ClanPanel({ userId, userCoins, onRefresh }: Props) {
   const [cEmblem, setCEmblem] = useState('⚔️')
   const [contributeAmt, setContributeAmt] = useState(100)
 
+  // edit form
+  const [eName, setEName] = useState('')
+  const [eDesc, setEDesc] = useState('')
+  const [eEmblem, setEEmblem] = useState('⚔️')
+
   const notify = (msg: string, ok = true) => {
     setToast({ msg, ok })
     setTimeout(() => setToast(null), 3000)
+    if (ok) sfxSuccess(); else sfxError()
   }
 
   const loadData = useCallback(async () => {
@@ -168,6 +176,38 @@ export function ClanPanel({ userId, userCoins, onRefresh }: Props) {
     try {
       await leaveClan()
       notify('Ты покинул клан')
+      setMyClan(null); onRefresh?.(); setView('home')
+    } catch (e: any) { notify(e?.response?.data?.detail ?? 'Ошибка', false) }
+    finally { setBusy(false) }
+  }
+
+  const handleOpenEdit = () => {
+    if (myClan) {
+      setEName(myClan.name)
+      setEDesc(myClan.description ?? '')
+      setEEmblem(myClan.emblem)
+    }
+    setView('edit')
+  }
+
+  const handleUpdate = async () => {
+    if (eName.trim().length < 2) { notify('Имя клана минимум 2 символа', false); return }
+    setBusy(true)
+    try {
+      const res = await updateClan(eName.trim(), eDesc.trim(), eEmblem || '⚔️')
+      notify(res.message)
+      onRefresh?.()
+      await loadData()
+    } catch (e: any) { notify(e?.response?.data?.detail ?? 'Ошибка', false) }
+    finally { setBusy(false) }
+  }
+
+  const handleDeleteClan = async () => {
+    if (!confirm('Удалить клан? Это действие необратимо. Все участники будут исключены.')) return
+    setBusy(true)
+    try {
+      const res = await deleteClan()
+      notify(res.message)
       setMyClan(null); onRefresh?.(); setView('home')
     } catch (e: any) { notify(e?.response?.data?.detail ?? 'Ошибка', false) }
     finally { setBusy(false) }
@@ -268,6 +308,52 @@ export function ClanPanel({ userId, userCoins, onRefresh }: Props) {
         </div>
       )}
 
+      {/* Редактировать клан */}
+      {view === 'edit' && myClan && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <button onClick={() => setView('mine')} style={s.back}>← Назад</button>
+            <div style={s.h1}>✏️ Редактировать клан</div>
+          </div>
+          <div style={s.card}>
+            <div style={s.label}>Эмблема</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+              {['⚔️','🛡','🔮','👑','🐉','🦅','🌟','💎','🔥','🌊','⚡','🌙'].map(em => (
+                <button key={em} onClick={() => setEEmblem(em)} style={{
+                  fontSize: 22, padding: '4px 8px', borderRadius: 8, cursor: 'pointer',
+                  background: eEmblem === em ? 'rgba(168,85,247,0.3)' : 'rgba(255,255,255,0.06)',
+                  border: `1px solid ${eEmblem === em ? '#a855f7' : 'rgba(255,255,255,0.1)'}`,
+                }}>{em}</button>
+              ))}
+            </div>
+            <div style={s.label}>Название *</div>
+            <input value={eName} onChange={e => setEName(e.target.value)} maxLength={32}
+              placeholder="Минимум 2 символа" style={s.input} />
+            <div style={s.label}>Описание</div>
+            <textarea value={eDesc} onChange={e => setEDesc(e.target.value)} maxLength={256}
+              placeholder="Расскажи о клане..." style={{ ...s.input, height: 72, resize: 'none' }} />
+            <button onClick={handleUpdate} disabled={busy || eName.trim().length < 2} style={s.btn('#a855f7')}>
+              {busy ? '...' : '💾 Сохранить изменения'}
+            </button>
+          </div>
+
+          {/* Удалить клан */}
+          <div style={{ ...s.card, borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.05)' }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#f87171', marginBottom: 6 }}>🗑 Опасная зона</div>
+            <div style={{ fontSize: 12, opacity: 0.65, marginBottom: 12 }}>
+              Удаление клана необратимо. Все участники будут исключены, история войн удалена.
+            </div>
+            <button onClick={handleDeleteClan} disabled={busy} style={{
+              ...s.btn('#ef4444'),
+              background: 'rgba(239,68,68,0.15)',
+              border: '1px solid rgba(239,68,68,0.5)',
+            }}>
+              {busy ? '...' : '🗑 Удалить клан'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Создать клан */}
       {view === 'create' && (
         <div>
@@ -348,6 +434,7 @@ export function ClanPanel({ userId, userCoins, onRefresh }: Props) {
           onContribute={handleContribute}
           onBuyWarItem={handleBuyWarItem}
           onLeave={handleLeave}
+          onEdit={handleOpenEdit}
           onPrepare={handlePrepare}
           onParticipate={handleParticipate}
           onStartWar={handleStartWar}
@@ -373,6 +460,7 @@ interface MyClanProps {
   onContribute: () => void
   onBuyWarItem: (type: string, name: string) => void
   onLeave: () => void
+  onEdit: () => void
   onPrepare: () => void
   onParticipate: (v: boolean) => void
   onStartWar: () => void
@@ -408,6 +496,15 @@ function MyClanView(p: MyClanProps) {
           </div>
           {clan.war_stage === 1 && <span style={warBadge('#fbbf24')}>⚔️ Подготовка</span>}
           {clan.war_stage === 2 && <span style={warBadge('#f87171')}>⚔️ Война!</span>}
+          {isLeader && (
+            <button onClick={p.onEdit} style={{
+              flexShrink: 0,
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              borderRadius: 8, padding: '5px 8px',
+              color: '#fff', cursor: 'pointer', fontSize: 15,
+            }}>✏️</button>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           {[
@@ -656,6 +753,13 @@ function WarResultsView({ clan, ws, isLeader, busy, warItems, onBuyWarItem, onPr
   const won = ws.winner_clan_id !== null && ws.winner_clan_id === clan.id
   const draw = ws.winner_clan_id === null
   const lost = !draw && !won
+
+  // Звук при показе итогов
+  useEffect(() => {
+    if (won) sfxWin()
+    else if (lost) sfxLose()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const resultColor = won ? '#22c55e' : lost ? '#f87171' : '#fbbf24'
   const resultEmoji = won ? '🏆' : lost ? '💀' : '🤝'
